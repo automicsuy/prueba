@@ -97,7 +97,8 @@ function levelsFor(athlete, sel) {
   const id = String(athlete.id);
   const out = { mayor: !!sel.mayor[id], sub20: !!sel.sub20[id] };
   const dob = (athlete.dateOfBirth || '').slice(0, 10);
-  const cands = dob && sel.wd[dob];
+  // Wikidata usa el 1 de enero cuando solo conoce el año: no sirve para identificar.
+  const cands = dob && !dob.endsWith('-01-01') && sel.wd[dob];
   if (cands) {
     const mine = new Set(norm(athlete.fullName || athlete.displayName));
     for (const c of cands) {
