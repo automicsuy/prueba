@@ -1,5 +1,5 @@
 // Proxy mínimo hacia la API pública de ESPN (evita bloqueos CORS del navegador).
-const ALLOWED = /^(soccer|basketball)\/[a-z0-9._]+\/(scoreboard|teams)$/;
+const ALLOWED = /^(soccer|basketball)\/[a-z0-9._]+\/(scoreboard|teams|teams\/\d+\/schedule)$/;
 
 module.exports = async (req, res) => {
   const url = new URL(req.url, 'http://x');
