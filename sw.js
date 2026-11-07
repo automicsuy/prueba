@@ -1,5 +1,5 @@
 // Service worker: app shell offline + última respuesta de la API como respaldo.
-const VERSION = 'agenda-v1';
+const VERSION = 'agenda-v2';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'leagues.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png'];
 
 self.addEventListener('install', e => {
@@ -15,7 +15,7 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
 
   // API: red primero, caché si no hay conexión
-  if (url.hostname === 'site.api.espn.com') {
+  if (url.hostname === 'site.api.espn.com' || url.pathname.includes('/api/')) {
     e.respondWith(
       fetch(e.request).then(res => {
         if (res.ok) { const copy = res.clone(); caches.open(VERSION + '-api').then(c => c.put(e.request, copy)); }

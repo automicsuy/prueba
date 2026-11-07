@@ -1,6 +1,8 @@
 'use strict';
 
-const API = 'https://site.api.espn.com/apis/site/v2/sports';
+const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
+// Vía proxy propio (api/espn.js en Vercel) para evitar CORS; directo como respaldo.
+const apiURLs = (path, qs) => [`api/espn?path=${path}&${qs}`, `${ESPN}/${path}?${qs}`];
 const LEAGUES = window.LEAGUES;
 const LEAGUE_BY_ID = Object.fromEntries(LEAGUES.map(l => [l.id, l]));
 const $ = s => document.querySelector(s);
@@ -33,12 +35,20 @@ const fmtDayLong = new Intl.DateTimeFormat('es-UY', { weekday: 'long', day: 'num
 
 /* ---------- Datos ---------- */
 const memCache = new Map(); // url -> {t, data}
-async function getJSON(url, ttl = 60_000) {
+async function getJSON([url, fallback], ttl = 60_000) {
   const hit = memCache.get(url);
   if (hit && Date.now() - hit.t < ttl) return hit.data;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
+  let data;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    data = await res.json();
+  } catch (e) {
+    if (!fallback) throw e;
+    const res = await fetch(fallback);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    data = await res.json();
+  }
   memCache.set(url, { t: Date.now(), data });
   return data;
 }
@@ -83,7 +93,7 @@ function normalize(ev, league) {
 async function fetchRange(from, to, leagues) {
   const out = [];
   await Promise.allSettled(leagues.map(async l => {
-    const url = `${API}/${l.sport}/${l.id}/scoreboard?dates=${ymd(from)}-${ymd(to)}&limit=400`;
+    const url = apiURLs(`${l.sport}/${l.id}/scoreboard`, `dates=${ymd(from)}-${ymd(to)}&limit=400`);
     try {
       const data = await getJSON(url);
       delete state.errors[l.id];
@@ -241,7 +251,7 @@ async function loadTeamIndex() {
   if (teamIndex) return teamIndex;
   const idx = new Map();
   await Promise.allSettled(LEAGUES.map(async l => {
-    const data = await getJSON(`${API}/${l.sport}/${l.id}/teams?limit=500`, 24 * 3600_000);
+    const data = await getJSON(apiURLs(`${l.sport}/${l.id}/teams`, 'limit=500'), 24 * 3600_000);
     const teams = data.sports?.[0]?.leagues?.[0]?.teams || [];
     teams.forEach(({ team: t }) => {
       const k = favKey(l.sport, t.id);
