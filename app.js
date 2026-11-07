@@ -31,7 +31,7 @@ const fmtDayShort = new Intl.DateTimeFormat('es-UY', { weekday: 'short', day: 'n
 const fmtDayLong = new Intl.DateTimeFormat('es-UY', { weekday: 'long', day: 'numeric', month: 'long' });
 
 /* ---------- Datos (vía funciones propias en /api, que consultan ESPN del lado del servidor) ---------- */
-const APP_VERSION = '4';
+const APP_VERSION = '5';
 const memCache = new Map(); // url -> {t, data}
 async function getJSON(url, ttl = 60_000) {
   const hit = memCache.get(url);
@@ -406,7 +406,11 @@ $('#view-agenda').addEventListener('touchend', e => {
 }, { passive: true });
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
+  // Cuando se activa una versión nueva, recargar una vez para usarla.
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
 }
 
 renderAgenda();
