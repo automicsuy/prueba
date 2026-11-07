@@ -6,24 +6,24 @@ async function get(u) {
 }
 module.exports = async (req, res) => {
   const out = {};
-  const sch = await get('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.worldq.conmebol/teams/212/schedule?season=2025');
-  const ev = (sch.body.events || []).find(e => e.competitions?.[0]?.status?.type?.state === 'post');
+  const sch = await get('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.friendly/teams/212/schedule?season=2024');
+  const ev = (sch.body.events || [])[0];
   out.event = ev && { id: ev.id, date: ev.date };
   if (ev) {
-    const s = await get(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.worldq.conmebol/summary?event=${ev.id}`);
+    const s = await get(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.friendly/summary?event=${ev.id}`);
     const t = (s.body.rosters || []).find(r => String(r.team?.id) === '212');
-    out.rosterKeys = t && Object.keys(t);
-    out.rosterEntry = t && trim(t.roster.find(p => p.starter), 3000);
+    out.rosterEntryStarter = t && trim(t.roster.find(p => p.starter), 2500);
+    out.rosterEntrySub = t && trim(t.roster.find(p => !p.starter && p.subbedIn), 1500);
   }
-  for (const u of [
-    'https://site.web.api.espn.com/apis/common/v3/sports/soccer/athletes/235818',
-    'https://site.web.api.espn.com/apis/common/v3/sports/soccer/athletes/235818/overview',
-    'https://site.web.api.espn.com/apis/common/v3/sports/soccer/athletes/235818/stats',
-    'https://sports.core.api.espn.com/v2/sports/soccer/athletes/235818',
-  ]) {
-    const r = await get(u);
-    out[u.replace(/^https:\/\/[^/]+/, '')] = { status: r.status, keys: typeof r.body === 'object' ? Object.keys(r.body) : null, sample: trim(r.body, 3500) };
-  }
+  const a = await get('https://site.web.api.espn.com/apis/common/v3/sports/soccer/athletes/235818');
+  const ath = a.body.athlete || {};
+  out.athleteKeys = Object.keys(ath);
+  out.athletePick = { team: ath.team && { id: ath.team.id, name: ath.team.displayName, slug: ath.team.slug }, headshot: ath.headshot, age: ath.age, active: ath.active, status: ath.status, position: ath.position?.abbreviation, displayDOB: ath.displayDOB, flag: ath.flag };
+  const o = await get('https://site.web.api.espn.com/apis/common/v3/sports/soccer/athletes/235818/overview');
+  out.nextGame = trim(o.body.nextGame, 1500);
+  out.gameLog = trim(o.body.gameLog, 1500);
+  const old = await get('https://site.web.api.espn.com/apis/common/v3/sports/soccer/athletes/18587/overview');
+  out.forlanOverview = trim(old.body.statistics, 800);
   res.setHeader('content-type', 'application/json');
   res.end(JSON.stringify(out, null, 1));
 };
