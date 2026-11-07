@@ -3,7 +3,8 @@
 // Complemento: Wikidata (nombre + fecha de nacimiento) para jugadores anteriores a la cobertura de ESPN.
 const { espn } = require('./_lib');
 
-const URU_TEAM_ID = '212';
+const URU_TEAM_ID = '212';      // Selección mayor en ESPN
+const URU_U20_TEAM_ID = '7345';  // Sub-20 en ESPN
 const MAYOR_LEAGUES = ['fifa.world', 'fifa.worldq.conmebol', 'conmebol.america', 'fifa.friendly'];
 const SUB20_LEAGUES = ['fifa.world.u20', 'conmebol.sudamericano_sub20'];
 const FIRST_SEASON = 2010;
@@ -18,12 +19,12 @@ async function pool(items, size, fn) {
 }
 
 // Partidos jugados por Uruguay en una lista de competiciones.
-async function uruEvents(leagues) {
+async function uruEvents(leagues, teamId) {
   const seasons = [];
   for (let y = FIRST_SEASON; y <= new Date().getFullYear(); y++) seasons.push(y);
   const jobs = leagues.flatMap(l => seasons.map(y => ({ l, y })));
   const res = await pool(jobs, 12, async ({ l, y }) => {
-    const data = await espn(`soccer/${l}/teams/${URU_TEAM_ID}/schedule`, `season=${y}`);
+    const data = await espn(`soccer/${l}/teams/${teamId}/schedule`, `season=${y}`);
     return (data.events || [])
       .filter(e => (e.competitions?.[0]?.status?.type?.state || e.status?.type?.state) === 'post')
       .map(e => ({ id: String(e.id), league: l }));
@@ -34,12 +35,12 @@ async function uruEvents(leagues) {
 }
 
 // Jugadores de Uruguay que entraron a la cancha (titulares o suplentes que ingresaron).
-async function uruPlayers(events) {
+async function uruPlayers(events, teamId) {
   const players = new Map();
   let ok = 0;
   await pool(events, 12, async ({ id, league }) => {
     const data = await espn(`soccer/${league}/summary`, `event=${id}`);
-    const team = (data.rosters || []).find(r => String(r.team?.id) === URU_TEAM_ID);
+    const team = (data.rosters || []).find(r => String(r.team?.id) === teamId);
     if (!team) return;
     ok++;
     (team.roster || []).forEach(p => {
@@ -73,11 +74,11 @@ async function wikidataPlayers() {
 async function buildSelecciones() {
   const t0 = Date.now();
   const [mayorEv, sub20Ev, wd] = await Promise.all([
-    uruEvents(MAYOR_LEAGUES),
-    uruEvents(SUB20_LEAGUES),
+    uruEvents(MAYOR_LEAGUES, URU_TEAM_ID),
+    uruEvents(SUB20_LEAGUES, URU_U20_TEAM_ID),
     wikidataPlayers().catch(() => ({})),
   ]);
-  const [mayor, sub20] = await Promise.all([uruPlayers(mayorEv), uruPlayers(sub20Ev)]);
+  const [mayor, sub20] = await Promise.all([uruPlayers(mayorEv, URU_TEAM_ID), uruPlayers(sub20Ev, URU_U20_TEAM_ID)]);
   return {
     builtAt: new Date().toISOString(),
     ms: Date.now() - t0,
