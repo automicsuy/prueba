@@ -1,8 +1,5 @@
 'use strict';
 
-const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
-// Vía proxy propio (api/espn.js en Vercel) para evitar CORS; directo como respaldo.
-const apiURLs = (path, qs) => [`api/espn?path=${path}&${qs}`, `${ESPN}/${path}?${qs}`];
 const LEAGUES = window.LEAGUES;
 const LEAGUE_BY_ID = Object.fromEntries(LEAGUES.map(l => [l.id, l]));
 const $ = s => document.querySelector(s);
@@ -33,102 +30,38 @@ const fmtTime = new Intl.DateTimeFormat('es-UY', { hour: '2-digit', minute: '2-d
 const fmtDayShort = new Intl.DateTimeFormat('es-UY', { weekday: 'short', day: 'numeric' });
 const fmtDayLong = new Intl.DateTimeFormat('es-UY', { weekday: 'long', day: 'numeric', month: 'long' });
 
-/* ---------- Datos ---------- */
+/* ---------- Datos (vía funciones propias en /api, que consultan ESPN del lado del servidor) ---------- */
+const APP_VERSION = '4';
 const memCache = new Map(); // url -> {t, data}
-async function getJSON([url, fallback], ttl = 60_000) {
+async function getJSON(url, ttl = 60_000) {
   const hit = memCache.get(url);
   if (hit && Date.now() - hit.t < ttl) return hit.data;
-  let data;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    data = await res.json();
-  } catch (e) {
-    if (!fallback) throw e;
-    const res = await fetch(fallback);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    data = await res.json();
-  }
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Servidor respondió ${res.status}`);
+  const data = await res.json();
   memCache.set(url, { t: Date.now(), data });
   return data;
 }
 
-function normalize(ev, league) {
-  const comp = ev.competitions?.[0] || {};
-  const side = ha => {
-    const c = (comp.competitors || []).find(x => x.homeAway === ha) || {};
-    const t = c.team || {};
-    return {
-      id: String(t.id ?? ''),
-      name: t.displayName || t.name || '—',
-      short: t.shortDisplayName || t.abbreviation || t.displayName || '—',
-      logo: t.logo || t.logos?.[0]?.href || '',
-      score: c.score?.displayValue ?? c.score ?? '',
-      winner: !!c.winner,
-    };
-  };
-  const st = ev.status?.type || comp.status?.type || {};
-  const tv = new Set();
-  (comp.broadcasts || []).forEach(b => (b.names || []).forEach(n => tv.add(n)));
-  (comp.geoBroadcasts || []).forEach(b => b.media?.shortName && tv.add(b.media.shortName));
-  return {
-    id: String(ev.id),
-    league,
-    sport: league.sport,
-    date: new Date(ev.date),
-    state: st.state || 'pre',                 // pre | in | post
-    statusName: st.name || '',
-    detail: st.shortDetail || st.detail || '',
-    clock: ev.status?.displayClock || '',
-    home: side('home'),
-    away: side('away'),
-    venue: comp.venue?.fullName || '',
-    city: comp.venue?.address?.city || '',
-    round: comp.notes?.[0]?.headline || ev.season?.slug || '',
-    tv: [...tv],
-    link: (ev.links || []).find(l => (l.rel || []).includes('summary'))?.href || ev.links?.[0]?.href || '',
-  };
+function hydrate(e) {
+  const league = LEAGUE_BY_ID[e.league];
+  return league ? { ...e, league, sport: league.sport, date: new Date(e.date) } : null;
 }
-
-// ESPN no acepta rangos de fechas y su "día" va de ~07:00/08:00 UTC a la misma hora del día siguiente.
-// Calculamos qué días de ESPN cubren el día local elegido (normalmente 2).
-function espnDates(localDay) {
-  const s = localDay.getTime(), e = addDays(localDay, 1).getTime() - 1;
-  const set = new Set();
-  for (const t of [s, e]) for (const off of [7, 8]) set.add(new Date(t - off * 3600_000).toISOString().slice(0, 10).replace(/-/g, ''));
-  return [...set];
-}
-
-const dedupeSort = list => {
-  const seen = new Set();
-  return list.filter(e => (seen.has(e.id) ? false : seen.add(e.id))).sort((a, b) => a.date - b.date);
-};
 
 async function fetchDay(localDay, leagues) {
-  const out = [];
-  const dates = espnDates(localDay);
-  await Promise.allSettled(leagues.flatMap(l => dates.map(async d => {
-    try {
-      const data = await getJSON(apiURLs(`${l.sport}/${l.id}/scoreboard`, `dates=${d}&limit=200`));
-      delete state.errors[l.id];
-      (data.events || []).forEach(ev => out.push(normalize(ev, l)));
-    } catch (e) {
-      state.errors[l.id] = e.message;
-    }
-  })));
-  return dedupeSort(out).filter(e => sameDay(e.date, localDay));
+  if (!leagues.length) return [];
+  const from = localDay.toISOString(), to = new Date(addDays(localDay, 1).getTime() - 1).toISOString();
+  const data = await getJSON(`api/agenda?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&leagues=${leagues.map(l => l.id).join(',')}`);
+  state.errors = data.errors || {};
+  return data.events.map(hydrate).filter(Boolean);
 }
 
-// Próximos partidos de un equipo en cada competición donde participa.
+// Próximos partidos de los favoritos en cada competición donde participan.
 async function fetchTeamSchedules(favs) {
-  const out = [];
-  await Promise.allSettled(favs.flatMap(f => (f.leagues || []).map(async lid => {
-    const l = LEAGUE_BY_ID[lid];
-    if (!l) return;
-    const data = await getJSON(apiURLs(`${l.sport}/${l.id}/teams/${f.id}/schedule`, 'fixture=true'), 10 * 60_000);
-    (data.events || []).forEach(ev => out.push(normalize(ev, l)));
-  })));
-  return dedupeSort(out);
+  const pairs = favs.flatMap(f => (f.leagues || []).map(lid => `${lid}:${f.id}`));
+  if (!pairs.length) return [];
+  const data = await getJSON(`api/fixtures?teams=${pairs.join(',')}`, 5 * 60_000);
+  return data.events.map(hydrate).filter(Boolean);
 }
 
 /* ---------- Favoritos ---------- */
@@ -207,7 +140,14 @@ async function renderAgenda() {
   const req = ++agendaReq;
   list.innerHTML = skeleton(6);
   const leagues = LEAGUES.filter(l => !state.disabled.has(l.id) && (state.sport === 'all' || l.sport === state.sport));
-  const events = await fetchDay(state.day, leagues);
+  let events;
+  try {
+    events = await fetchDay(state.day, leagues);
+  } catch (err) {
+    if (req !== agendaReq) return;
+    list.innerHTML = `<div class="empty">No se pudieron cargar los partidos.<br><small>${esc(err.message)}</small><br><button class="btn" id="retry">Reintentar</button></div>`;
+    return;
+  }
   if (req !== agendaReq) return;
   let dayEvents = events;
   if (state.onlyFavs) dayEvents = dayEvents.filter(isFavEvent);
@@ -227,7 +167,7 @@ async function renderAgenda() {
   if (!dayEvents.length) {
     const failed = Object.keys(state.errors).length;
     parts.push(`<div class="empty">${state.onlyFavs ? 'Tus equipos no juegan este día.' : 'No hay partidos este día en tus competiciones.'}
-      ${failed === leagues.length && leagues.length ? '<br><small>No se pudo conectar con la fuente de datos. Revisá tu conexión.</small>' : ''}</div>`);
+      ${failed ? `<br><small>${failed} competiciones sin respuesta de la fuente.</small>` : ''}</div>`);
   }
   list.innerHTML = parts.join('');
   scheduleRefresh(dayEvents);
@@ -260,8 +200,13 @@ async function renderFavs() {
   list.innerHTML = skeleton(4);
   await enrichFavLeagues();
   const limit = addDays(new Date(), 21).getTime();
-  const events = (await fetchTeamSchedules(Object.values(state.favs)))
-    .filter(e => e.state !== 'post' && e.date.getTime() >= Date.now() - 3 * 3600_000 && e.date.getTime() <= limit);
+  let events;
+  try {
+    events = (await fetchTeamSchedules(Object.values(state.favs))).filter(e => e.date.getTime() <= limit);
+  } catch (err) {
+    if (req === favReq) list.innerHTML = `<div class="empty">No se pudieron cargar los partidos.<br><small>${esc(err.message)}</small></div>`;
+    return;
+  }
   if (req !== favReq) return;
   events.forEach(e => currentEvents.set(e.id, e));
   list.innerHTML = events.length
@@ -273,23 +218,14 @@ async function renderFavs() {
 let teamIndex = null;
 async function loadTeamIndex() {
   if (teamIndex) return teamIndex;
-  const idx = new Map();
-  await Promise.allSettled(LEAGUES.map(async l => {
-    const data = await getJSON(apiURLs(`${l.sport}/${l.id}/teams`, 'limit=500'), 24 * 3600_000);
-    const teams = data.sports?.[0]?.leagues?.[0]?.teams || [];
-    teams.forEach(({ team: t }) => {
-      const k = favKey(l.sport, t.id);
-      const cur = idx.get(k) || { key: k, sport: l.sport, id: String(t.id), name: t.displayName, logo: t.logos?.[0]?.href || '', leagues: [] };
-      cur.leagues.push(l.id);
-      idx.set(k, cur);
-    });
-  }));
-  teamIndex = [...idx.values()];
+  const data = await getJSON('api/teams', 24 * 3600_000);
+  teamIndex = data.teams;
   return teamIndex;
 }
 // Completa en qué competiciones juega cada favorito (p. ej. liga + copa + selecciones).
 async function enrichFavLeagues() {
-  const idx = await loadTeamIndex();
+  let idx = [];
+  try { idx = await loadTeamIndex(); } catch { /* sin índice: se usan las ligas guardadas */ }
   const byKey = new Map(idx.map(t => [t.key, t]));
   let changed = false;
   for (const f of Object.values(state.favs)) {
@@ -301,13 +237,14 @@ async function enrichFavLeagues() {
   if (changed) store.set('favs', state.favs);
 }
 
-const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
 async function searchTeams(q) {
   const box = $('#teamResults');
   if (q.trim().length < 2) { box.innerHTML = ''; return; }
   if (!teamIndex) box.innerHTML = `<p class="hint">Cargando equipos…</p>`;
-  const idx = await loadTeamIndex();
+  let idx;
+  try { idx = await loadTeamIndex(); } catch (err) { box.innerHTML = `<p class="hint">No se pudo cargar la lista de equipos (${esc(err.message)}).</p>`; return; }
   const nq = norm(q);
   const hits = idx.filter(t => norm(t.name).includes(nq)).slice(0, 12);
   box.innerHTML = hits.length
@@ -326,7 +263,7 @@ function renderSettings() {
     <label class="toggle"><span>${l.flag} ${esc(l.name)} ${state.errors[l.id] ? '<em class="err">sin datos</em>' : ''}</span>
       <input type="checkbox" data-league="${esc(l.id)}" ${state.disabled.has(l.id) ? '' : 'checked'}></label>`).join('')).join('');
   const failed = Object.keys(state.errors).map(id => LEAGUE_BY_ID[id]?.name).filter(Boolean);
-  $('#sourceStatus').textContent = failed.length ? `Sin respuesta de la fuente para: ${failed.join(', ')}.` : '';
+  $('#sourceStatus').textContent = `Versión ${APP_VERSION}. ` + (failed.length ? `Sin datos de la fuente para: ${failed.join(', ')}.` : '');
 }
 
 /* ---------- Detalle ---------- */
@@ -396,6 +333,7 @@ document.addEventListener('click', ev => {
   const el = ev.target.closest('button, a');
   if (!el) return;
   if (el.matches('.tabs [role=tab]')) return setTab(el.dataset.tab);
+  if (el.id === 'retry') { memCache.clear(); return renderAgenda(); }
   if (el.id === 'prevDay') { state.day = addDays(state.day, -1); return renderAgenda(); }
   if (el.id === 'nextDay') { state.day = addDays(state.day, 1); return renderAgenda(); }
   if (el.matches('.day')) { state.day = addDays(state.day, +el.dataset.off); return renderAgenda(); }
@@ -447,7 +385,7 @@ $('#onlyFavs').addEventListener('change', ev => { state.onlyFavs = ev.target.che
 
 let searchTimer;
 $('#teamSearch').addEventListener('input', ev => { clearTimeout(searchTimer); searchTimer = setTimeout(() => searchTeams(ev.target.value), 200); });
-$('#teamSearch').addEventListener('focus', () => loadTeamIndex(), { once: true });
+$('#teamSearch').addEventListener('focus', () => loadTeamIndex().catch(() => {}), { once: true });
 
 $('#leagueToggles').addEventListener('change', ev => {
   const id = ev.target.dataset.league;

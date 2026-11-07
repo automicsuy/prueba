@@ -1,6 +1,6 @@
 // Competiciones (slugs de la API pública de ESPN: site.api.espn.com/apis/site/v2/sports/{sport}/{id})
 // Para agregar/quitar una competición, editá esta lista.
-window.LEAGUES = [
+const LEAGUES_LIST = [
   // Fútbol – ligas
   { id: 'eng.1', sport: 'soccer', name: 'Premier League', group: 'Ligas', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
   { id: 'esp.1', sport: 'soccer', name: 'LaLiga', group: 'Ligas', flag: '🇪🇸' },
@@ -34,3 +34,6 @@ window.LEAGUES = [
   { id: 'nba', sport: 'basketball', name: 'NBA', group: 'Básquet', flag: '🏀' },
   { id: 'fiba', sport: 'basketball', name: 'FIBA (selecciones)', group: 'Básquet', flag: '🌐' },
 ];
+
+if (typeof window !== 'undefined') window.LEAGUES = LEAGUES_LIST;
+if (typeof module !== 'undefined') module.exports = LEAGUES_LIST;
