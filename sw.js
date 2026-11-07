@@ -1,5 +1,5 @@
 // Service worker: app shell offline + última respuesta de la API como respaldo.
-const VERSION = 'agenda-v2';
+const VERSION = 'agenda-v3';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'leagues.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png'];
 
 self.addEventListener('install', e => {
