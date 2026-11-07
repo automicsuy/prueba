@@ -15,6 +15,20 @@ module.exports = async (req, res) => {
     for (const l of U20_CANDIDATES) {
       try { const d = await espn(`soccer/${l}/teams/${URU_TEAM_ID}/schedule`, 'season=2025'); out['u20:' + l] = `ok ${(d.events || []).length} ev`; } catch (e) { out['u20:' + l] = String(e.message); }
     }
+  } else if (mode === 'u20') {
+    for (const l of ['fifa.world.u20', 'conmebol.sudamericano_sub20']) {
+      for (const y of ['', '2025', '2023', '2019']) {
+        try {
+          const d = await espn(`soccer/${l}/teams`, y ? `season=${y}` : '');
+          const teams = d.sports?.[0]?.leagues?.[0]?.teams || [];
+          out[`${l}:${y || 'actual'}`] = `${teams.length} equipos; ` + teams.filter(t => /urug/i.test(t.team.displayName)).map(t => `${t.team.displayName}=${t.team.id}`).join(',');
+        } catch (e) { out[`${l}:${y}`] = String(e.message); }
+      }
+      try {
+        const d = await espn(`soccer/${l}/scoreboard`, 'dates=20250101-20251231');
+        out[`${l}:sb2025`] = (d.events || []).length;
+      } catch (e) { out[`${l}:sb2025`] = String(e.message); }
+    }
   } else if (mode === 'sel') {
     const s = await buildSelecciones();
     out = { ms: s.ms, stats: s.stats, valverde: s.mayor['235818'] || null, sampleMayor: Object.values(s.mayor).slice(0, 40), sampleSub20: Object.values(s.sub20).slice(0, 30) };
