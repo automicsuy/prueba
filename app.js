@@ -17,9 +17,12 @@ const state = {
   sport: 'all',
   onlyFavs: store.get('onlyFavs', false),
   favs: store.get('favs', {}),               // key "sport:teamId" -> {key, sport, id, name, logo}
-  disabled: new Set(store.get('disabled', [])),
+  disabled: new Set(store.get('disabled', [])),   // competiciones normales apagadas
+  extrasOn: new Set(store.get('extrasOn', [])),   // "Más ligas" encendidas en la agenda
+  uruAll: store.get('uruAll', false),
   errors: {},
 };
+const leagueOn = l => (l.extra ? state.extrasOn.has(l.id) : !state.disabled.has(l.id));
 
 /* ---------- Fechas ---------- */
 function startOfDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
@@ -31,7 +34,7 @@ const fmtDayShort = new Intl.DateTimeFormat('es-UY', { weekday: 'short', day: 'n
 const fmtDayLong = new Intl.DateTimeFormat('es-UY', { weekday: 'long', day: 'numeric', month: 'long' });
 
 /* ---------- Datos (vía funciones propias en /api, que consultan ESPN del lado del servidor) ---------- */
-const APP_VERSION = '5';
+const APP_VERSION = '6';
 const memCache = new Map(); // url -> {t, data}
 async function getJSON(url, ttl = 60_000) {
   const hit = memCache.get(url);
@@ -54,6 +57,28 @@ async function fetchDay(localDay, leagues) {
   const data = await getJSON(`api/agenda?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&leagues=${leagues.map(l => l.id).join(',')}`);
   state.errors = data.errors || {};
   return data.events.map(hydrate).filter(Boolean);
+}
+
+// Uruguayos en los planteles de los partidos del día (y partidos de las selecciones de Uruguay).
+const uruCache = new Map(); // ymd -> {events, players, seleccion}
+async function fetchUru(localDay) {
+  const key = ymd(localDay);
+  const hit = uruCache.get(key);
+  if (hit && Date.now() - hit.t < 5 * 60_000) return hit.data;
+  const from = localDay.toISOString(), to = new Date(addDays(localDay, 1).getTime() - 1).toISOString();
+  const raw = await getJSON(`api/uruguayos?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, 5 * 60_000);
+  const data = { events: raw.events.map(hydrate).filter(Boolean), players: raw.players || {}, seleccion: raw.seleccion || {} };
+  uruCache.set(key, { t: Date.now(), data });
+  return data;
+}
+const uruFor = e => uruCache.get(ymd(startOfDay(e.date)))?.data;
+const shownPlayers = list => (state.uruAll ? list : list.filter(p => p.m || p.s20));
+function uruBadge(e) {
+  const d = uruFor(e);
+  if (!d) return '';
+  if (d.seleccion[e.id]) return `<span class="uru-badge">🇺🇾 ${d.seleccion[e.id] === 'sub20' ? 'Sub-20' : 'Selección'}</span>`;
+  const n = shownPlayers(d.players[e.id] || []).length;
+  return n ? `<span class="uru-badge" title="Uruguayos en el plantel">🇺🇾 ${n}</span>` : '';
 }
 
 // Próximos partidos de los favoritos en cada competición donde participan.
@@ -105,6 +130,7 @@ function eventCard(e, { showDate = false } = {}) {
     <div class="m-status">
       ${showDate ? `<span class="m-date">${esc(fmtDayShort.format(e.date))}</span>` : ''}
       ${statusHTML(e)}
+      ${e.league.id === 'uru.1' ? '' : uruBadge(e)}
     </div>
     <div class="m-teams">${teamRow(e.home, e)}${teamRow(e.away, e)}</div>
     ${e.tv.length ? `<div class="m-tv" title="${esc(e.tv.join(', '))}">📺 ${esc(e.tv.slice(0, 2).join(', '))}</div>` : ''}
@@ -139,7 +165,7 @@ async function renderAgenda() {
   const list = $('#agendaList');
   const req = ++agendaReq;
   list.innerHTML = skeleton(6);
-  const leagues = LEAGUES.filter(l => !state.disabled.has(l.id) && (state.sport === 'all' || l.sport === state.sport));
+  const leagues = LEAGUES.filter(l => leagueOn(l) && (state.sport === 'all' || l.sport === state.sport));
   let events;
   try {
     events = await fetchDay(state.day, leagues);
@@ -149,9 +175,19 @@ async function renderAgenda() {
     return;
   }
   if (req !== agendaReq) return;
+  lastAgenda = events;
+  paintAgenda(events);
+  // Marcas 🇺🇾 en segundo plano (no bloquea la agenda).
+  const day = state.day;
+  fetchUru(day).then(() => { if (req === agendaReq && state.tab === 'agenda') paintAgenda(lastAgenda); }).catch(() => {});
+}
+
+let lastAgenda = [];
+function paintAgenda(events) {
+  const list = $('#agendaList');
   let dayEvents = events;
   if (state.onlyFavs) dayEvents = dayEvents.filter(isFavEvent);
-  currentEvents = new Map(events.map(e => [e.id, e]));
+  events.forEach(e => currentEvents.set(e.id, e));
 
   const parts = [`<h2 class="section-title">${esc(cap(fmtDayLong.format(state.day)))}</h2>`];
   const favEvents = dayEvents.filter(isFavEvent);
@@ -179,6 +215,47 @@ function scheduleRefresh(events) {
   clearTimeout(refreshTimer);
   const soon = events.some(e => e.state === 'in' || (e.state === 'pre' && e.date - Date.now() < 30 * 60_000 && e.date - Date.now() > -3 * 3600_000));
   if (soon) refreshTimer = setTimeout(() => { if (!document.hidden && state.tab === 'agenda') { memCache.clear(); renderAgenda(); } }, 60_000);
+}
+
+/* ---------- Uruguayos ---------- */
+function playerChips(list, e) {
+  return list.map(p => {
+    const team = p.side === 'home' ? e.home.short : e.away.short;
+    const lvl = p.m ? '<b class="lvl mayor">Mayor</b>' : p.s20 ? '<b class="lvl s20">Sub-20</b>' : '';
+    return `<li><span class="pname">${esc(p.n)}</span> <small>${esc(team)}${p.p ? ' · ' + esc(p.p) : ''}</small> ${lvl}</li>`;
+  }).join('');
+}
+
+let uruReq = 0;
+async function renderUru() {
+  renderDays();
+  const list = $('#uruList');
+  const req = ++uruReq;
+  list.innerHTML = `<p class="hint">Revisando planteles… la primera vez del día puede tardar unos segundos.</p>` + skeleton(4);
+  let d;
+  try {
+    d = await fetchUru(state.day);
+  } catch (err) {
+    if (req === uruReq) list.innerHTML = `<div class="empty">No se pudo revisar los planteles.<br><small>${esc(err.message)}</small><br><button class="btn" id="retryUru">Reintentar</button></div>`;
+    return;
+  }
+  if (req !== uruReq) return;
+  d.events.forEach(e => currentEvents.set(e.id, e));
+  const parts = [`<h2 class="section-title">${esc(cap(fmtDayLong.format(state.day)))}</h2>`];
+  const sel = d.events.filter(e => d.seleccion[e.id]);
+  if (sel.length) parts.push(`<div class="league uru-league"><h3>🇺🇾 Selección uruguaya</h3>${sel.map(e => eventCard(e)).join('')}</div>`);
+  const withPlayers = d.events.filter(e => !d.seleccion[e.id] && shownPlayers(d.players[e.id] || []).length);
+  const total = withPlayers.reduce((n, e) => n + shownPlayers(d.players[e.id]).length, 0);
+  if (withPlayers.length) parts.push(`<p class="hint">${withPlayers.length} ${withPlayers.length === 1 ? 'partido' : 'partidos'} · ${total} ${total === 1 ? 'jugador' : 'jugadores'}</p>`);
+  for (const [id, evs] of groupByLeague(withPlayers)) {
+    const l = LEAGUE_BY_ID[id];
+    parts.push(`<div class="league"><h3><span>${l.flag}</span> ${esc(l.name)}</h3>${evs.map(e =>
+      `<div class="uru-item">${eventCard(e)}<ul class="uru-players">${playerChips(shownPlayers(d.players[e.id]), e)}</ul></div>`).join('')}</div>`);
+  }
+  if (!sel.length && !withPlayers.length) {
+    parts.push(`<div class="empty">No hay partidos con uruguayos ${state.uruAll ? '' : 'de selección '}este día.${state.uruAll ? '' : '<br><small>Probá activar "Incluir uruguayos sin selección".</small>'}</div>`);
+  }
+  list.innerHTML = parts.join('');
 }
 
 /* ---------- Mis equipos ---------- */
@@ -261,7 +338,8 @@ function renderSettings() {
   const groups = [...new Set(LEAGUES.map(l => l.group))];
   $('#leagueToggles').innerHTML = groups.map(g => `<h3 class="grp">${esc(g)}</h3>` + LEAGUES.filter(l => l.group === g).map(l => `
     <label class="toggle"><span>${l.flag} ${esc(l.name)} ${state.errors[l.id] ? '<em class="err">sin datos</em>' : ''}</span>
-      <input type="checkbox" data-league="${esc(l.id)}" ${state.disabled.has(l.id) ? '' : 'checked'}></label>`).join('')).join('');
+      <input type="checkbox" data-league="${esc(l.id)}" ${leagueOn(l) ? 'checked' : ''}></label>`).join('')).join('')
+    + `<p class="hint">"Más ligas" siempre se revisan en la pestaña 🇺🇾 aunque estén apagadas acá.</p>`;
   const failed = Object.keys(state.errors).map(id => LEAGUE_BY_ID[id]?.name).filter(Boolean);
   $('#sourceStatus').textContent = `Versión ${APP_VERSION}. ` + (failed.length ? `Sin datos de la fuente para: ${failed.join(', ')}.` : '');
 }
@@ -283,6 +361,7 @@ function openDetail(e) {
       ${e.venue ? `<li>📍 ${esc(e.venue)}${e.city ? ', ' + esc(e.city) : ''}</li>` : ''}
       <li>📺 ${e.tv.length ? esc(e.tv.join(', ')) : 'Transmisión no informada'}</li>
     </ul>
+    ${(() => { const list = uruFor(e)?.players[e.id]; return list?.length ? `<h4 class="dlg-sub">🇺🇾 Uruguayos en los planteles</h4><ul class="uru-players">${playerChips(list, e)}</ul>` : ''; })()}
     <div class="actions">
       ${teamBtn(e.home)}${teamBtn(e.away)}
       ${e.state === 'pre' ? `<button class="btn" type="button" data-ics="${esc(e.id)}">🗓️ Agregar al calendario</button>` : ''}
@@ -321,8 +400,10 @@ function toast(msg) {
 function setTab(tab) {
   state.tab = tab;
   document.querySelectorAll('.tabs [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
-  document.querySelectorAll('.view').forEach(v => (v.hidden = v.id !== `view-${tab}`));
+  document.querySelectorAll('section.view').forEach(v => (v.hidden = v.id !== `view-${tab}`));
+  $('#dayNav').hidden = !(tab === 'agenda' || tab === 'uru');
   if (tab === 'agenda') renderAgenda();
+  if (tab === 'uru') renderUru();
   if (tab === 'favs') renderFavs();
   if (tab === 'ajustes') renderSettings();
 }
@@ -334,9 +415,10 @@ document.addEventListener('click', ev => {
   if (!el) return;
   if (el.matches('.tabs [role=tab]')) return setTab(el.dataset.tab);
   if (el.id === 'retry') { memCache.clear(); return renderAgenda(); }
-  if (el.id === 'prevDay') { state.day = addDays(state.day, -1); return renderAgenda(); }
-  if (el.id === 'nextDay') { state.day = addDays(state.day, 1); return renderAgenda(); }
-  if (el.matches('.day')) { state.day = addDays(state.day, +el.dataset.off); return renderAgenda(); }
+  if (el.id === 'prevDay') { state.day = addDays(state.day, -1); return rerenderCurrent(); }
+  if (el.id === 'nextDay') { state.day = addDays(state.day, 1); return rerenderCurrent(); }
+  if (el.matches('.day')) { state.day = addDays(state.day, +el.dataset.off); return rerenderCurrent(); }
+  if (el.id === 'retryUru') { memCache.clear(); uruCache.clear(); return renderUru(); }
   if (el.matches('#sportFilter button')) {
     state.sport = el.dataset.sport;
     document.querySelectorAll('#sportFilter button').forEach(b => b.classList.toggle('on', b === el));
@@ -383,6 +465,9 @@ $('#detail').addEventListener('click', ev => { if (ev.target === ev.currentTarge
 $('#onlyFavs').checked = state.onlyFavs;
 $('#onlyFavs').addEventListener('change', ev => { state.onlyFavs = ev.target.checked; store.set('onlyFavs', state.onlyFavs); renderAgenda(); });
 
+$('#uruAll').checked = state.uruAll;
+$('#uruAll').addEventListener('change', ev => { state.uruAll = ev.target.checked; store.set('uruAll', state.uruAll); renderUru(); });
+
 let searchTimer;
 $('#teamSearch').addEventListener('input', ev => { clearTimeout(searchTimer); searchTimer = setTimeout(() => searchTeams(ev.target.value), 200); });
 $('#teamSearch').addEventListener('focus', () => loadTeamIndex().catch(() => {}), { once: true });
@@ -390,20 +475,27 @@ $('#teamSearch').addEventListener('focus', () => loadTeamIndex().catch(() => {})
 $('#leagueToggles').addEventListener('change', ev => {
   const id = ev.target.dataset.league;
   if (!id) return;
-  ev.target.checked ? state.disabled.delete(id) : state.disabled.add(id);
-  store.set('disabled', [...state.disabled]);
+  if (LEAGUE_BY_ID[id].extra) {
+    ev.target.checked ? state.extrasOn.add(id) : state.extrasOn.delete(id);
+    store.set('extrasOn', [...state.extrasOn]);
+  } else {
+    ev.target.checked ? state.disabled.delete(id) : state.disabled.add(id);
+    store.set('disabled', [...state.disabled]);
+  }
 });
 
 document.addEventListener('visibilitychange', () => { if (!document.hidden && state.tab === 'agenda') renderAgenda(); });
 
 // Swipe entre días
 let touchX = null;
-$('#view-agenda').addEventListener('touchstart', e => { touchX = e.touches[0].clientX; }, { passive: true });
-$('#view-agenda').addEventListener('touchend', e => {
-  if (touchX === null) return;
-  const dx = e.changedTouches[0].clientX - touchX; touchX = null;
-  if (Math.abs(dx) > 80) { state.day = addDays(state.day, dx < 0 ? 1 : -1); renderAgenda(); }
-}, { passive: true });
+for (const v of ['#view-agenda', '#view-uru']) {
+  $(v).addEventListener('touchstart', e => { touchX = e.touches[0].clientX; }, { passive: true });
+  $(v).addEventListener('touchend', e => {
+    if (touchX === null) return;
+    const dx = e.changedTouches[0].clientX - touchX; touchX = null;
+    if (Math.abs(dx) > 80) { state.day = addDays(state.day, dx < 0 ? 1 : -1); rerenderCurrent(); }
+  }, { passive: true });
+}
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   const hadController = !!navigator.serviceWorker.controller;

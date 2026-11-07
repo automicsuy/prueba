@@ -151,3 +151,31 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); backdrop-filter: blur(3px); }
   .m-tv { display: none; }
   .tabs button { padding: 6px 9px; }
 }
+
+/* Navegación de días compartida */
+.daynav { padding-bottom: 0; }
+#view-agenda, #view-uru { padding-top: 0; }
+
+/* Uruguayos */
+.uru-hint { flex: 1 1 100%; margin: 0; }
+.uru-badge {
+  display: inline-block; margin-top: 3px; font-size: 11px; font-weight: 600; white-space: nowrap;
+  color: #9bd0f5; background: rgba(85, 181, 229, .12); border: 1px solid rgba(85, 181, 229, .3);
+  border-radius: 999px; padding: 1px 7px; width: fit-content;
+}
+.uru-league { border-color: rgba(85, 181, 229, .4); }
+.uru-league h3 { color: #9bd0f5; }
+.uru-item { border-top: 1px solid var(--line); }
+.league h3 + .uru-item { border-top: 0; }
+.uru-item .match { border-top: 0; }
+.uru-players { list-style: none; margin: 0; padding: 0 14px 10px 98px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.uru-players li { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.uru-players .pname { font-weight: 600; }
+.uru-players small { color: var(--muted); }
+.lvl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; padding: 1px 6px; border-radius: 6px; }
+.lvl.mayor { background: #55b5e5; color: #04263a; }
+.lvl.s20 { background: rgba(85, 181, 229, .2); color: #9bd0f5; }
+.dlg .uru-players { padding: 0 0 10px; }
+.dlg-sub { font-size: 13px; color: var(--muted); margin: 4px 0 8px; font-weight: 600; }
+@media (max-width: 380px) { .uru-players { padding-left: 14px; } }
+@media (max-width: 420px) { .brand h1 { display: none; } }

@@ -107,4 +107,20 @@ function levelsFor(athlete, sel) {
   return out;
 }
 
-module.exports = { URU_TEAM_ID, buildSelecciones, levelsFor, pool };
+// Índice de selecciones con caché: memoria de la función (12 h) → endpoint propio cacheado en el edge → cálculo local.
+let selCache = null;
+async function getSelecciones(host) {
+  if (selCache && Date.now() - selCache.t < 12 * 3600_000) return selCache.data;
+  let data = null;
+  if (host) {
+    try {
+      const r = await fetch(`https://${host}/api/selecciones`, { headers: { accept: 'application/json' } });
+      if (r.ok) data = await r.json();
+    } catch { /* se calcula localmente */ }
+  }
+  if (!data?.mayor) data = await buildSelecciones();
+  selCache = { t: Date.now(), data };
+  return data;
+}
+
+module.exports = { URU_TEAM_ID, URU_U20_TEAM_ID, buildSelecciones, getSelecciones, levelsFor, pool };

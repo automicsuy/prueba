@@ -80,4 +80,26 @@ function send(res, status, body, sMaxAge = 30) {
 
 const query = req => new URL(req.url, 'http://x').searchParams;
 
-module.exports = { LEAGUES, LEAGUE_BY_ID, espn, espnDatesBetween, compact, dedupeSort, send, query };
+// Partidos entre dos instantes (ms) para una lista de competiciones.
+async function getEvents(from, to, leagues) {
+  const dates = espnDatesBetween(from, to);
+  const events = [], errors = {};
+  await Promise.all(leagues.flatMap(l => dates.map(async d => {
+    try {
+      const data = await espn(`${l.sport}/${l.id}/scoreboard`, `dates=${d}&limit=200`);
+      (data.events || []).forEach(ev => events.push(compact(ev, l.id)));
+    } catch (e) {
+      errors[l.id] = String(e.message || e);
+    }
+  })));
+  const inRange = dedupeSort(events).filter(e => { const t = Date.parse(e.date); return t >= from && t <= to; });
+  return { events: inRange, errors, dates };
+}
+
+function parseRange(q) {
+  const from = Date.parse(q.get('from')), to = Date.parse(q.get('to'));
+  if (!from || !to || to < from || to - from > 3 * 86400_000) return null;
+  return { from, to };
+}
+
+module.exports = { LEAGUES, LEAGUE_BY_ID, espn, espnDatesBetween, compact, dedupeSort, send, query, getEvents, parseRange };

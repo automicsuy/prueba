@@ -33,6 +33,30 @@ const LEAGUES_LIST = [
   // Básquet
   { id: 'nba', sport: 'basketball', name: 'NBA', group: 'Básquet', flag: '🏀' },
   { id: 'fiba', sport: 'basketball', name: 'FIBA (selecciones)', group: 'Básquet', flag: '🌐' },
+
+  // Más ligas: siempre se revisan en la pestaña "Uruguayos"; en la agenda vienen apagadas (se activan en ⚙︎).
+  { id: 'conmebol.sudamericano_sub20', sport: 'soccer', name: 'Sudamericano Sub-20', group: 'Más ligas', flag: '🌎', extra: true },
+  { id: 'fifa.world.u20', sport: 'soccer', name: 'Mundial Sub-20', group: 'Más ligas', flag: '🌎', extra: true },
+  { id: 'bra.1', sport: 'soccer', name: 'Brasileirão', group: 'Más ligas', flag: '🇧🇷', extra: true },
+  { id: 'bra.copa_do_brazil', sport: 'soccer', name: 'Copa do Brasil', group: 'Más ligas', flag: '🇧🇷', extra: true },
+  { id: 'mex.1', sport: 'soccer', name: 'Liga MX', group: 'Más ligas', flag: '🇲🇽', extra: true },
+  { id: 'por.1', sport: 'soccer', name: 'Primeira Liga', group: 'Más ligas', flag: '🇵🇹', extra: true },
+  { id: 'esp.2', sport: 'soccer', name: 'LaLiga 2', group: 'Más ligas', flag: '🇪🇸', extra: true },
+  { id: 'eng.2', sport: 'soccer', name: 'Championship', group: 'Más ligas', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', extra: true },
+  { id: 'ita.2', sport: 'soccer', name: 'Serie B', group: 'Más ligas', flag: '🇮🇹', extra: true },
+  { id: 'fra.1', sport: 'soccer', name: 'Ligue 1', group: 'Más ligas', flag: '🇫🇷', extra: true },
+  { id: 'ger.1', sport: 'soccer', name: 'Bundesliga', group: 'Más ligas', flag: '🇩🇪', extra: true },
+  { id: 'tur.1', sport: 'soccer', name: 'Süper Lig', group: 'Más ligas', flag: '🇹🇷', extra: true },
+  { id: 'gre.1', sport: 'soccer', name: 'Superliga Grecia', group: 'Más ligas', flag: '🇬🇷', extra: true },
+  { id: 'ksa.1', sport: 'soccer', name: 'Saudi Pro League', group: 'Más ligas', flag: '🇸🇦', extra: true },
+  { id: 'arg.copa', sport: 'soccer', name: 'Copa Argentina', group: 'Más ligas', flag: '🇦🇷', extra: true },
+  { id: 'chi.1', sport: 'soccer', name: 'Primera Chile', group: 'Más ligas', flag: '🇨🇱', extra: true },
+  { id: 'par.1', sport: 'soccer', name: 'Primera Paraguay', group: 'Más ligas', flag: '🇵🇾', extra: true },
+  { id: 'ecu.1', sport: 'soccer', name: 'LigaPro Ecuador', group: 'Más ligas', flag: '🇪🇨', extra: true },
+  { id: 'col.1', sport: 'soccer', name: 'Primera A Colombia', group: 'Más ligas', flag: '🇨🇴', extra: true },
+  { id: 'per.1', sport: 'soccer', name: 'Liga 1 Perú', group: 'Más ligas', flag: '🇵🇪', extra: true },
+  { id: 'bol.1', sport: 'soccer', name: 'Primera Bolivia', group: 'Más ligas', flag: '🇧🇴', extra: true },
+  { id: 'ven.1', sport: 'soccer', name: 'Primera Venezuela', group: 'Más ligas', flag: '🇻🇪', extra: true },
 ];
 
 if (typeof window !== 'undefined') window.LEAGUES = LEAGUES_LIST;

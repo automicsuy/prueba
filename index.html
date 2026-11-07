@@ -21,18 +21,23 @@
     </div>
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="agenda" aria-selected="true">Agenda</button>
-      <button role="tab" data-tab="favs" aria-selected="false">Mis equipos</button>
+      <button role="tab" data-tab="uru" aria-selected="false" aria-label="Uruguayos">🇺🇾</button>
+      <button role="tab" data-tab="favs" aria-selected="false">Equipos</button>
       <button role="tab" data-tab="ajustes" aria-selected="false" aria-label="Ajustes">⚙︎</button>
     </nav>
   </header>
 
-  <!-- AGENDA -->
-  <section id="view-agenda" class="view">
+  <!-- Navegación de días (Agenda y Uruguayos) -->
+  <div id="dayNav" class="view daynav">
     <div class="daybar">
       <button class="icon-btn" id="prevDay" aria-label="Día anterior">‹</button>
       <div class="days" id="days"></div>
       <button class="icon-btn" id="nextDay" aria-label="Día siguiente">›</button>
     </div>
+  </div>
+
+  <!-- AGENDA -->
+  <section id="view-agenda" class="view">
     <div class="filters">
       <div class="seg" id="sportFilter">
         <button data-sport="all" class="on">Todo</button>
@@ -44,6 +49,17 @@
       </label>
     </div>
     <div id="agendaList" class="list" aria-live="polite"></div>
+  </section>
+
+  <!-- URUGUAYOS -->
+  <section id="view-uru" class="view" hidden>
+    <div class="filters">
+      <p class="hint uru-hint">Partidos con uruguayos en el plantel que jugaron en la selección <b>Mayor</b> o <b>Sub-20</b>. Sin Liga Uruguaya.</p>
+      <label class="switch">
+        <input type="checkbox" id="uruAll"> <span>Incluir uruguayos sin selección</span>
+      </label>
+    </div>
+    <div id="uruList" class="list" aria-live="polite"></div>
   </section>
 
   <!-- FAVORITOS -->
