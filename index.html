@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0f14">
+  <meta name="description" content="Agenda personal de fútbol y básquet con equipos favoritos">
+  <title>Mi Agenda Deportiva</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <img src="icons/icon.svg" alt="" width="28" height="28">
+      <h1>Agenda</h1>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="agenda" aria-selected="true">Agenda</button>
+      <button role="tab" data-tab="favs" aria-selected="false">Mis equipos</button>
+      <button role="tab" data-tab="ajustes" aria-selected="false" aria-label="Ajustes">⚙︎</button>
+    </nav>
+  </header>
+
+  <!-- AGENDA -->
+  <section id="view-agenda" class="view">
+    <div class="daybar">
+      <button class="icon-btn" id="prevDay" aria-label="Día anterior">‹</button>
+      <div class="days" id="days"></div>
+      <button class="icon-btn" id="nextDay" aria-label="Día siguiente">›</button>
+    </div>
+    <div class="filters">
+      <div class="seg" id="sportFilter">
+        <button data-sport="all" class="on">Todo</button>
+        <button data-sport="soccer">⚽ Fútbol</button>
+        <button data-sport="basketball">🏀 Básquet</button>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="onlyFavs"> <span>Solo favoritos</span>
+      </label>
+    </div>
+    <div id="agendaList" class="list" aria-live="polite"></div>
+  </section>
+
+  <!-- FAVORITOS -->
+  <section id="view-favs" class="view" hidden>
+    <div class="card pad">
+      <h2>Agregar equipo</h2>
+      <input type="search" id="teamSearch" placeholder="Buscar: Peñarol, Real Madrid, Lakers, Uruguay…" autocomplete="off">
+      <div id="teamResults" class="results"></div>
+      <p class="hint">Tip: también podés tocar cualquier partido en la agenda y seguir a sus equipos.</p>
+    </div>
+    <div id="favChips" class="chips"></div>
+    <h2 class="section-title">Próximos partidos de tus equipos <small>(21 días)</small></h2>
+    <div id="favList" class="list"></div>
+  </section>
+
+  <!-- AJUSTES -->
+  <section id="view-ajustes" class="view" hidden>
+    <div class="card pad">
+      <h2>Competiciones</h2>
+      <p class="hint">Elegí qué competiciones ver en la agenda.</p>
+      <div id="leagueToggles"></div>
+    </div>
+    <div class="card pad">
+      <h2>Datos</h2>
+      <p class="hint">Calendario y resultados: API pública de ESPN. "TV" muestra las transmisiones oficiales que reporta ESPN (pueden variar por país).</p>
+      <div id="sourceStatus" class="hint"></div>
+      <button class="btn" id="exportFavs">Exportar favoritos</button>
+      <button class="btn" id="importFavs">Importar favoritos</button>
+    </div>
+  </section>
+
+  <dialog id="detail"></dialog>
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="leagues.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
