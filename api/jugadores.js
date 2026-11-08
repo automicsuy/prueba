@@ -43,10 +43,11 @@ async function player(id) {
     const tid = clubSplits[0].team;
     club = { id: tid, displayName: teamNames[tid] || clubSplits[0].name.replace(/^\S+\s+/, ''), logos: [{ href: `https://a.espncdn.com/i/teamlogos/soccer/500/${tid}.png` }] };
   }
-  // En actividad: jugó esta temporada con un club, o el perfil lo marca activo con club.
-  if (!club || (!clubSplits.length && !a.active)) return null;
-  const sum = k => clubSplits.reduce((n, sp) => n + sp[k], 0);
   const ng = ov.nextGame?.league?.events?.[0];
+  // En actividad: jugó esta temporada con un club, o tiene club y un próximo partido programado
+  // (ESPN no tiene estadísticas de algunas ligas, como la uruguaya). Descarta retirados con perfil viejo.
+  if (!club || (!clubSplits.length && !(a.active && ng))) return null;
+  const sum = k => clubSplits.reduce((n, sp) => n + sp[k], 0);
   return {
     id,
     n: a.displayName,
