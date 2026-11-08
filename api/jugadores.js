@@ -3,6 +3,7 @@
 const { send } = require('./_lib');
 const { URU_TEAM_ID, URU_U20_TEAM_ID, getSelecciones, pool } = require('./_uru');
 const { photoIndex, findPhoto } = require('./_photos');
+const { parseGameLog, formIndex } = require('./_form');
 
 const WEB = 'https://site.web.api.espn.com/apis/common/v3/sports/soccer/athletes';
 const NATIONAL = new Set([URU_TEAM_ID, URU_U20_TEAM_ID]);
@@ -49,6 +50,12 @@ async function player(id) {
   // (ESPN no tiene estadísticas de algunas ligas, como la uruguaya). Descarta retirados con perfil viejo.
   if (!club || (!clubSplits.length && !(a.active && ng))) return null;
   const sum = k => clubSplits.reduce((n, sp) => n + sp[k], 0);
+  // Forma: últimos partidos de club. El nivel sale de la liga principal del club (no de copas).
+  const games = parseGameLog(ov.gameLog);
+  const pos = a.position?.abbreviation || '';
+  const slug = clubSplits.map(sp => sp.league).find(l => /\.\d$/.test(l)) || clubSplits[0]?.league || '';
+  const fi = formIndex(games, ['G', 'D', 'M', 'F'].includes(pos) ? pos : 'M', slug);
+  const form = { i: fi.index, r: fi.rodaje, a: fi.aporte, n: fi.nivel, t: fi.trend, off: fi.daysOff, last: games.slice(0, 5) };
   // "22/7/1998" → "1998-07-22"
   const dm = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(a.displayDOB || '');
   const dob = dm ? `${dm[3]}-${dm[2].padStart(2, '0')}-${dm[1].padStart(2, '0')}` : '';
@@ -57,11 +64,12 @@ async function player(id) {
     n: a.displayName,
     dob,
     espnPhoto: a.headshot?.href || '',
-    pos: a.position?.abbreviation || '',
+    pos,
     age: a.age || null,
     club: { id: String(club.id), name: club.displayName || club.name, logo: club.logos?.[0]?.href || '' },
     temp: { tit: sum('tit'), g: sum('g'), a: sum('a'), sh: sum('sh'), sog: sum('sog'), ta: sum('ta'), tr: sum('tr') },
     splits: clubSplits.map(({ team, ...rest }) => rest),
+    form,
     next: ng ? { date: ng.date, name: ng.name, league: ov.nextGame.league.shortName || ov.nextGame.league.name } : null,
     link: `https://www.espn.com/soccer/player/_/id/${id}`,
   };
@@ -84,7 +92,7 @@ module.exports = async (req, res) => {
       p.sub20 = sel.stats?.sub20?.[p.id] || (sel.sub20[p.id] ? { ...empty } : null);
     });
     out.sort((x, y) => (y.mayor?.pj || 0) - (x.mayor?.pj || 0) || (y.sub20?.pj || 0) - (x.sub20?.pj || 0));
-    res.setHeader('cache-control', 'public, max-age=0, s-maxage=43200, stale-while-revalidate=604800');
+    res.setHeader('cache-control', 'public, max-age=0, s-maxage=21600, stale-while-revalidate=604800');
     res.statusCode = 200;
     res.setHeader('content-type', 'application/json; charset=utf-8');
     res.end(JSON.stringify({ players: out, checked: ids.length, errors: Object.keys(errors).length, ms: Date.now() - t0, builtAt: new Date().toISOString() }));

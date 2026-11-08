@@ -1,7 +1,7 @@
 'use strict';
 // Celestes: los uruguayos de la selección — partidos, estadísticas, noticias y videos.
 
-const APP_VERSION = '13';
+const APP_VERSION = '14';
 const LEAGUES = window.LEAGUES;
 const LEAGUE_BY_ID = Object.fromEntries(LEAGUES.map(l => [l.id, l]));
 const $ = s => document.querySelector(s);
@@ -310,6 +310,7 @@ function openPlayer(id) {
       </div>
     </div>
     <div class="actions"><button class="btn filled" type="button" data-videos-of="${esc(p.id)}">${ic('play')}Videos</button><button class="btn" type="button" data-news-of="${esc(p.id)}">${ic('news')}Noticias</button></div>
+    ${typeof formBlock === 'function' ? formBlock(p) : ''}
     ${selBlock('Selección Mayor', p.mayor)}
     ${selBlock('Selección Sub-20', p.sub20)}
     <h4 class="dlg-sub">Club · temporada actual</h4>
@@ -321,6 +322,7 @@ function openPlayer(id) {
     ${p.next ? `<h4 class="dlg-sub">Próximo partido</h4><div class="next">${ic('calendar')}<div><b>${esc(p.next.name.replace(' at ', ' vs. '))}</b><small>${esc(p.next.league)} · ${esc(cap(fmtDayLong.format(new Date(p.next.date))))}, ${fmtTime.format(new Date(p.next.date))}</small></div></div>` : ''}
     <div id="playerNews"></div>
     <div class="actions"><a class="btn text" href="${esc(p.link)}" target="_blank" rel="noopener">Ficha en ESPN${ic('external')}</a></div>`, 'pcard');
+  if (typeof paintCallBox === 'function') loadSel().then(() => paintCallBox(p)).catch(() => {});
   // Últimas noticias del jugador.
   loadNews().then(d => {
     const items = d.items.filter(n => n.ids.includes(p.id)).slice(0, 4);
