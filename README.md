@@ -10,6 +10,12 @@ Agenda personal de fútbol y básquet, sin publicidad, con equipos favoritos.
 - Activar/desactivar competiciones en ⚙︎. Exportar/importar favoritos.
 - Instalable (PWA) y funciona offline con los últimos datos.
 
+## 🇺🇾 Uruguayos
+Partidos del día con uruguayos en el plantel que jugaron en la selección Mayor o Sub-20 (con sus nombres), y partidos de las selecciones. Sin Liga Uruguaya. Interruptor para incluir al resto de los uruguayos.
+
+## 📊 Jugadores de la selección
+Jugadores en actividad que jugaron en la Mayor o la Sub-20: partidos, titularidades, goles, asistencias y tarjetas con la selección (alineaciones de ESPN desde 2010), y titularidades, goles, asistencias, remates y tarjetas con su club en la temporada actual. Tabla con buscador, filtro y orden; ficha por jugador con su próximo partido.
+
 ## Competiciones
 Premier League, LaLiga, Serie A, MLS, Liga Argentina, Liga Uruguaya · Champions, Europa League, Conference, Supercopa UEFA, Libertadores, Sudamericana, Recopa · Selecciones mayores masculinas (Mundial, Eliminatorias, Copa América, Euro, Nations League, Copa Oro, amistosos) · NBA, FIBA.
 Editá `leagues.js` para agregar o quitar.
