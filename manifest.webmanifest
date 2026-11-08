@@ -1,7 +1,7 @@
 {
-  "name": "Celestes",
+  "name": "Celestes · La app del hincha celeste",
   "short_name": "Celestes",
-  "description": "Los uruguayos de la selección: partidos, estadísticas, noticias y videos",
+  "description": "La app del hincha celeste: la selección uruguaya, sus jugadores, noticias, videos y tu voto.",
   "lang": "es",
   "start_url": "./",
   "scope": "./",
