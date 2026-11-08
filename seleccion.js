@@ -64,11 +64,11 @@ async function initSupabase() {
   sel.sb.auth.onAuthStateChange((_e, session) => { sel.session = session; if (state.tab === 'sel') renderSel(); });
   return sel.sb;
 }
-async function signIn() {
+async function signIn(vista = 'votar') {
   saveDraft();
   const sb = await initSupabase();
   if (!sb) return toastMsg('La votación todavía no está configurada.');
-  const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${location.origin}${location.pathname}?tab=sel&vista=votar` } });
+  const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${location.origin}${location.pathname}?tab=sel&vista=${vista}` } });
   if (error) toastMsg(/provider is not enabled|Unsupported provider/i.test(error.message) ? 'El inicio de sesión con Google todavía no está habilitado.' : `No se pudo iniciar sesión: ${error.message}`);
 }
 async function signOut() { await sel.sb?.auth.signOut(); sel.session = null; sel.myVote = null; renderSel(); }
@@ -111,7 +111,7 @@ function toastMsg(msg) {
 }
 
 /* ---------- Render principal ---------- */
-const SEL_VIEWS = [['resumen', 'Resumen'], ['convocados', 'Convocados'], ['votar', 'Votá'], ['resultados', 'Resultados'], ['noticias', 'Noticias']];
+const SEL_VIEWS = [['resumen', 'Resumen'], ['votar', 'Votá'], ['prode', 'Prode'], ['resultados', 'Resultados'], ['convocados', 'Convocados'], ['noticias', 'Noticias']];
 let selReq = 0;
 async function renderSel() {
   const box = $('#selBody');
@@ -121,8 +121,8 @@ async function renderSel() {
   try { await loadSel(); } catch (err) { if (req === selReq) box.innerHTML = errorBox('No se pudieron cargar los datos de la selección.', err, 'retrySel'); return; }
   if (req !== selReq) return;
   setSub(sel.data.upcoming[0] ? `Próximo: ${sel.data.upcoming[0].rival.name}` : 'Selección uruguaya');
-  const views = { resumen: viewResumen, convocados: viewConvocados, votar: viewVotar, resultados: viewResultados, noticias: viewNoticias };
-  await views[sel.view](box, req);
+  const views = { resumen: viewResumen, convocados: viewConvocados, votar: viewVotar, prode: viewProde, resultados: viewResultados, noticias: viewNoticias };
+  await (views[sel.view] || viewResumen)(box, req);
 }
 
 /* ---------- Resumen ---------- */
@@ -155,6 +155,7 @@ async function viewResumen(box) {
     </a>` : `<div class="empty"><b>Sin partidos programados</b><small>ESPN todavía no publicó el próximo partido de la Celeste.</small></div>`}
     ${d.upcoming.length > 1 ? `<h3 class="group-h">También en agenda</h3><div class="card">${d.upcoming.slice(1).map(m => `<div class="mrow">${flag(m.rival.logo, m.rival.name)}<span><b>${m.local ? 'Uruguay vs ' : ''}${esc(m.rival.name)}${m.local ? '' : ' vs Uruguay'}</b><small>${esc(m.comp)} · ${esc(cap(fmtDayLong.format(new Date(m.date))))}, ${fmtTime.format(new Date(m.date))}</small></span></div>`).join('')}</div>` : ''}
     ${w ? `<button class="vote-cta" data-sel-view="votar"><span><b>Armá tu selección</b><small>Votá tus 26 convocados y tu oncena para la ${esc(w.title.replace(/^Fecha FIFA /, 'fecha FIFA de '))}. Cierra: ${esc(cap(fmtDayLong.format(new Date(w.closesAt))))}.</small></span>${ic('right')}</button>` : ''}
+    ${next ? `<button class="vote-cta prode-cta" data-sel-view="prode"><span><b>Jugá al prode</b><small>Pronosticá ${next.local ? `Uruguay–${esc(next.rival.name)}` : `${esc(next.rival.name)}–Uruguay`} y el goleador celeste. Armá una liga con tus amigos.</small></span>${ic('right')}</button>` : ''}
     <h3 class="group-h">Últimos 12 meses</h3>
     <div class="kpis rec"><div><b>${r.pj}</b><small>Partidos</small></div><div><b>${r.g}</b><small>Ganados</small></div><div><b>${r.e}</b><small>Empates</small></div><div><b>${r.p}</b><small>Perdidos</small></div><div><b>${r.gf}</b><small>Goles a favor</small></div><div><b>${r.gc}</b><small>En contra</small></div></div>
     <h3 class="group-h">Resultados recientes</h3>
@@ -271,6 +272,7 @@ function paintXiStep(el) {
       }).join('')}
     </div>
     <p class="kpi-note">Tocá cada puesto para elegir entre tus ${dr.squad.length} convocados.</p>
+    ${filled === 11 ? `<div class="actions center"><button class="btn" data-sel-action="share-mine">${ic('external')}Compartir mi oncena</button></div>` : ''}
     <div class="vote-foot">
       <button class="btn" data-step="squad">Volver a convocados</button>
       <button class="btn filled" data-sel-action="save" ${filled < 11 || sel.saving ? 'disabled' : ''}>${sel.saving ? 'Guardando…' : sel.session ? (sel.myVote ? 'Actualizar mi voto' : 'Enviar mi voto') : 'Iniciar sesión con Google y votar'}</button>
@@ -331,6 +333,11 @@ async function viewResultados(box, req) {
   const picks = Object.fromEntries(Object.entries(perLine).map(([l, k]) => [l, bestIn(l, k)]));
   slotsOf(form).forEach(s => { const x = picks[s.line].shift(); if (x) xi[s.id] = x; });
   const pct = n => Math.round((n / r.voters) * 100);
+  sel.peopleSpec = {
+    title: 'La oncena de la gente', formation: form,
+    subtitle: `${w.title} · ${r.voters} ${r.voters === 1 ? 'votante' : 'votantes'}`,
+    players: Object.fromEntries(Object.entries(xi).map(([slot, x]) => { const p = pinfo(x.player); return [slot, { n: p.n, photo: p.photo, badge: `${pct(x.n)}%` }]; })),
+  };
   box.innerHTML = `
     <div class="kpis rec three"><div><b>${r.voters}</b><small>${r.voters === 1 ? 'votante' : 'votantes'}</small></div><div><b>${form}</b><small>formación más votada</small></div><div><b>${official.size ? `${coincide}/26` : '—'}</b><small>coinciden con el DT</small></div></div>
     <h3 class="group-h">La oncena de la gente</h3>
@@ -349,11 +356,15 @@ async function viewResultados(box, req) {
         <span class="bar"><i style="width:${pct(x.n)}%"></i></span></span>
       <span class="pnum">${pct(x.n)}%</span></div>`; }).join('')}</div>
     ${r.formations.length > 1 ? `<h3 class="group-h">Formaciones</h3><div class="card pad-sm">${r.formations.map(f => `<div class="frow"><b>${f.formation}</b><span class="bar"><i style="width:${pct(f.n)}%"></i></span><small>${pct(f.n)}%</small></div>`).join('')}</div>` : ''}
-    <div class="actions"><button class="btn filled" data-sel-view="votar">${sel.myVote ? 'Cambiar mi voto' : 'Votar'}</button></div>`;
+    <div class="actions"><button class="btn filled" data-sel-view="votar">${sel.myVote ? 'Cambiar mi voto' : 'Votar'}</button>
+      ${sel.myVote ? `<button class="btn" data-sel-action="share-mine">${ic('external')}Compartir mi oncena</button>` : ''}
+      <button class="btn" data-sel-action="share-people">${ic('external')}Compartir la de la gente</button></div>`;
 }
 
 /* ---------- Eventos de la sección ---------- */
 function onSelClick(ev) {
+  if (typeof onShareClick === 'function' && onShareClick(ev)) return true;
+  if (typeof onProdeClick === 'function' && onProdeClick(ev)) return true;
   const el = ev.target.closest('button, [data-player]');
   if (!el) return false;
   const ds = el.dataset;
@@ -394,9 +405,12 @@ function onSelClick(ev) {
   if (a === 'onlysel') { sel.onlySel = !sel.onlySel; paintStep(); return true; }
   if (a === 'save') { saveVote(); return true; }
   if (a === 'logout') { signOut(); return true; }
+  if (a === 'share-mine') { openShareCard(myCardSpec(), 'mia'); return true; }
+  if (a === 'share-people' && sel.peopleSpec) { openShareCard(sel.peopleSpec, 'gente'); return true; }
   return false;
 }
 function onSelInput(ev) {
+  if (typeof onProdeInput === 'function' && onProdeInput(ev)) return;
   if (ev.target.id !== 'eligSearch') return;
   sel.q = ev.target.value;
   clearTimeout(onSelInput.t);

@@ -1,7 +1,7 @@
 'use strict';
 // Celestes: los uruguayos de la selección — partidos, estadísticas, noticias y videos.
 
-const APP_VERSION = '12';
+const APP_VERSION = '13';
 const LEAGUES = window.LEAGUES;
 const LEAGUE_BY_ID = Object.fromEntries(LEAGUES.map(l => [l.id, l]));
 const $ = s => document.querySelector(s);

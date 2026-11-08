@@ -81,6 +81,37 @@ async function ensureWindow(win) {
   } catch { /* la votación se muestra igual; el voto falla con un mensaje claro si la fecha no existe */ }
 }
 
+// Prode: carga en Supabase los partidos de la Celeste Mayor (próximos y recién jugados, con los goleadores uruguayos).
+async function scorersOf(e) {
+  const d = await espn(`soccer/${e.league}/summary`, `event=${e.id}`);
+  return [...new Set((d.keyEvents || []).filter(k => k.scoringPlay && String(k.team?.id) === URU_TEAM_ID && !k.shootout && !/own/i.test(k.type?.text || ''))
+    .map(k => k.participants?.[0]?.athlete?.id).filter(Boolean).map(String))];
+}
+async function syncProde(events) {
+  const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_ANON_KEY, token = process.env.VOTE_WINDOW_TOKEN;
+  if (!url || !key || !token) return;
+  const now = Date.now();
+  const pick = events.filter(e => {
+    const t = Date.parse(e.date);
+    return e.home?.id && e.away?.id && (e.state === 'post' ? now - t < 10 * 86400_000 : t - now < 60 * 86400_000 && t > now - 6 * 3600_000);
+  });
+  if (!pick.length) return;
+  const rows = await pool(pick, 4, async e => ({
+    id: e.id, kickoff: e.date, comp: e.comp || '', home: es(e.home.name), away: es(e.away.name), home_logo: e.home.logo || '', away_logo: e.away.logo || '',
+    uru_home: e.home.id === URU_TEAM_ID, state: e.state,
+    home_score: e.state === 'pre' ? null : Number(e.home.score), away_score: e.state === 'pre' ? null : Number(e.away.score),
+    uru_scorers: e.state === 'pre' ? [] : await scorersOf(e).catch(() => []),
+  }));
+  try {
+    await fetch(`${url}/rest/v1/rpc/prode_sync`, {
+      method: 'POST',
+      headers: { apikey: key, authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ p_token: token, p_matches: rows.filter(r => r && r.id) }),
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch { /* el prode muestra los partidos que ya estaban cargados */ }
+}
+
 module.exports = async (req, res) => {
   try {
     const [all, future, sel, photos, roster, playersRes] = await Promise.all([
@@ -138,6 +169,9 @@ module.exports = async (req, res) => {
       window = { id, title, closesAt: next.date, matches: sameWindow.map(m => m.id) };
       if (Date.parse(next.date) - now < 75 * 86400_000) await ensureWindow(window);
     }
+    const evMap = new Map();
+    [...all, ...future].forEach(e => evMap.set(e.id, e));
+    await syncProde([...evMap.values()]).catch(() => {});
 
     res.setHeader('cache-control', 'public, max-age=0, s-maxage=900, stale-while-revalidate=3600');
     res.statusCode = 200;

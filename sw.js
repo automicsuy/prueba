@@ -1,6 +1,6 @@
 // Service worker: red primero (siempre la última versión); caché solo como respaldo sin conexión.
-const VERSION = 'celestes-v12';
-const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'seleccion.js', 'leagues.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png'];
+const VERSION = 'celestes-v13';
+const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'seleccion.js', 'share.js', 'prode.js', 'leagues.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
