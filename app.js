@@ -1,7 +1,7 @@
 'use strict';
 // Celestes: los uruguayos de la selección — partidos, estadísticas, noticias y videos.
 
-const APP_VERSION = '15';
+const APP_VERSION = '16';
 const LEAGUES = window.LEAGUES;
 const LEAGUE_BY_ID = Object.fromEntries(LEAGUES.map(l => [l.id, l]));
 const $ = s => document.querySelector(s);
@@ -261,7 +261,8 @@ const SORTS = {
   selG: (a, b) => selTot(b, 'g') - selTot(a, 'g') || selTot(b, 'pj') - selTot(a, 'pj'),
   clubG: (a, b) => b.temp.g - a.temp.g || b.temp.a - a.temp.a,
   clubA: (a, b) => b.temp.a - a.temp.a || b.temp.g - a.temp.g,
-  clubTit: (a, b) => b.temp.tit - a.temp.tit,
+  clubTit: (a, b) => b.temp.tit - a.temp.tit || (b.temp.pj || 0) - (a.temp.pj || 0),
+  clubPj: (a, b) => (b.temp.pj || 0) - (a.temp.pj || 0) || b.temp.tit - a.temp.tit,
   age: (a, b) => (a.age || 99) - (b.age || 99),
   name: (a, b) => a.n.localeCompare(b.n),
 };
@@ -288,7 +289,7 @@ async function renderStats() {
       <div class="plist-head"><span>${rows.length} ${rows.length === 1 ? 'jugador' : 'jugadores'}</span><span title="Partidos con la selección">PJ<small>${lvlName}</small></span><span title="Goles con la selección">G<small>${lvlName}</small></span><span title="Goles con el club esta temporada">G<small>club</small></span></div>
       ${rows.map(p => `<button class="prow" data-player="${esc(p.id)}">
         ${avatar(p, 'md')}
-        <span class="pinfo"><b>${esc(p.n)}</b><small>${p.club.logo ? `<img src="${esc(p.club.logo)}" alt="" loading="lazy" onerror="this.remove()">` : ''}${esc(p.club.name)}${p.age ? ` · ${p.age} años` : ''}</small><span class="tags">${lvlTags(p)}</span></span>
+        <span class="pinfo"><b>${esc(p.n)}</b><small>${p.club.logo ? `<img src="${esc(p.club.logo)}" alt="" loading="lazy" onerror="this.remove()">` : ''}${esc(p.club.name)}${p.age ? ` · ${p.age} años` : ''}</small><span class="tags">${lvlTags(p)}${p.temp.pj ? `<span class="tag club" title="Partidos en el club esta temporada">Club: ${p.temp.pj} PJ · ${p.temp.tit} tit · ${p.temp.sup} sup</span>` : ''}</span></span>
         ${[selTot(p, 'pj'), selTot(p, 'g'), p.temp.g].map(v => `<span class="pnum ${v ? '' : 'dim'}">${v}</span>`).join('')}
       </button>`).join('')}
     </div>` : `<div class="empty"><b>Sin resultados</b><small>Probá con otro nombre o club.</small></div>`;
@@ -315,13 +316,15 @@ function openPlayer(id) {
     ${selBlock('Selección Sub-20', p.sub20)}
     <h4 class="dlg-sub">Club · temporada actual</h4>
     ${p.splits.length ? `<div class="table-wrap"><table class="stats small">
-      <thead><tr><th class="l">Competición</th><th>Tit</th><th>G</th><th>A</th><th>Rem</th><th>Arco</th><th>TA</th><th>TR</th></tr></thead>
-      <tbody>${p.splits.map(sp => `<tr><td class="l">${esc(sp.name)}</td><td>${sp.tit}</td><td>${sp.g}</td><td>${sp.a}</td><td>${sp.sh}</td><td>${sp.sog}</td><td>${sp.ta}</td><td>${sp.tr}</td></tr>`).join('')}
-      <tr class="tot"><td class="l">Total</td><td>${p.temp.tit}</td><td>${p.temp.g}</td><td>${p.temp.a}</td><td>${p.temp.sh}</td><td>${p.temp.sog}</td><td>${p.temp.ta}</td><td>${p.temp.tr}</td></tr></tbody>
+      <thead><tr><th class="l">Competición</th><th>PJ</th><th>Tit</th><th>Sup</th><th>G</th><th>A</th><th>Rem</th><th>Arco</th><th>TA</th><th>TR</th></tr></thead>
+      <tbody>${p.splits.map(sp => `<tr><td class="l">${esc(sp.name)}</td><td>${sp.pj ?? '–'}</td><td>${sp.tit}</td><td>${sp.sup ?? '–'}</td><td>${sp.g}</td><td>${sp.a}</td><td>${sp.sh}</td><td>${sp.sog}</td><td>${sp.ta}</td><td>${sp.tr}</td></tr>`).join('')}
+      <tr class="tot"><td class="l">Total</td><td>${p.temp.pj ?? '–'}</td><td>${p.temp.tit}</td><td>${p.temp.sup ?? '–'}</td><td>${p.temp.g}</td><td>${p.temp.a}</td><td>${p.temp.sh}</td><td>${p.temp.sog}</td><td>${p.temp.ta}</td><td>${p.temp.tr}</td></tr></tbody>
     </table></div>` : `<p class="kpi-note">ESPN no tiene estadísticas de esta temporada para su liga.</p>`}
     ${p.next ? `<h4 class="dlg-sub">Próximo partido</h4><div class="next">${ic('calendar')}<div><b>${esc(p.next.name.replace(' at ', ' vs. '))}</b><small>${esc(p.next.league)} · ${esc(cap(fmtDayLong.format(new Date(p.next.date))))}, ${fmtTime.format(new Date(p.next.date))}</small></div></div>` : ''}
+    <div id="playerMatches"></div>
     <div id="playerNews"></div>
     <div class="actions"><a class="btn text" href="${esc(p.link)}" target="_blank" rel="noopener">Ficha en ESPN${ic('external')}</a></div>`, 'pcard');
+  loadPlayerMatches(p);
   if (typeof paintCallBox === 'function') loadSel().then(() => paintCallBox(p)).catch(() => {});
   // Últimas noticias del jugador.
   loadNews().then(d => {
@@ -329,6 +332,29 @@ function openPlayer(id) {
     const box = $('#playerNews');
     if (box && items.length) box.innerHTML = `<h4 class="dlg-sub">Últimas noticias</h4><div class="news-list">${items.map(n => newsRow(n)).join('')}</div>`;
   }).catch(() => {});
+}
+
+// Partidos de club de la temporada: titular o suplente, minutos y aporte en cada uno.
+const MATCH_ST = { T: ['TIT', 't'], S: ['SUP', 's'] };
+async function loadPlayerMatches(p) {
+  const box = $('#playerMatches');
+  if (!box) return;
+  box.innerHTML = `<h4 class="dlg-sub">Partidos de club esta temporada</h4>${loading('Buscando sus partidos…')}`;
+  let d;
+  try { d = await getJSON(`api/partidos?id=${encodeURIComponent(p.id)}`, 3 * 3600_000); } catch { if ($('#playerMatches')) $('#playerMatches').innerHTML = ''; return; }
+  if (!$('#playerMatches') || !d.matches?.length) { if ($('#playerMatches')) $('#playerMatches').innerHTML = ''; return; }
+  const t = d.totals;
+  $('#playerMatches').innerHTML = `<h4 class="dlg-sub">Partidos de club esta temporada</h4>
+    <div class="kpis"><div><b>${t.pj}</b><small>Jugados</small></div><div><b>${t.tit}</b><small>Titular</small></div><div><b>${t.sup}</b><small>Suplente</small></div>
+      <div><b>${t.minOf ? Math.round(t.min / t.minOf) + "'" : '–'}</b><small>Min. promedio</small></div><div><b>${t.g}</b><small>Goles</small></div><div><b>${t.a}</b><small>Asist.</small></div></div>
+    <p class="kpi-note">Minutos promedio de los últimos ${t.minOf} partidos. Fuente: ESPN.</p>
+    <ol class="flog mlog">${d.matches.map(m => {
+      const st = MATCH_ST[m.st];
+      return `<li>${st ? `<span class="st ${st[1]}">${st[0]}${m.min != null ? `<small>${m.min}'</small>` : ''}</span>` : '<span class="st n">–</span>'}
+        <span class="fl-opp">${m.oppLogo ? `<img src="${esc(m.oppLogo)}" alt="" loading="lazy" onerror="this.remove()">` : ''}<b>${m.home ? 'vs' : '@'} ${esc(m.opp)}</b><small>${esc(m.comp)} · ${fmtDate(m.d)}</small></span>
+        <span class="fl-res r-${esc(m.res)}">${esc(m.score)}</span>
+        <span class="fl-ga">${m.g ? `<b>${m.g} G</b>` : ''}${m.a ? `<b>${m.a} A</b>` : ''}${m.ta ? '<b class="yc" title="Amarilla">▮</b>' : ''}${m.tr ? '<b class="rc" title="Roja">▮</b>' : ''}</span></li>`;
+    }).join('')}</ol>`;
 }
 
 /* ---------- Noticias ---------- */

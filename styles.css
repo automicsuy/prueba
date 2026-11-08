@@ -638,3 +638,9 @@ button.slot:hover .slot-empty { transform: scale(1.06); }
 .d3p .fchip-i { min-width: 0; padding: 3px 8px; margin-top: 4px; } .d3p .fchip-i b { font-size: 14px; }
 .d3b { display: flex; gap: 6px; } .d3b .btn { flex: 1; justify-content: center; height: 34px; padding: 0 6px; background: var(--bg); }
 .d3b .btn.filled { background: var(--accent-strong); }
+/* Partidos de club en la ficha */
+.tag.club { background: var(--surface-3); color: var(--text-2); }
+.mlog .st { display: flex; flex-direction: column; line-height: 1.1; padding: 4px 0; }
+.mlog .st small { font-size: 10px; font-weight: 600; opacity: .85; }
+.flog .st.n { color: var(--muted); }
+.fl-ga b.yc { color: #c99a00; background: #fdf3dc; } .fl-ga b.rc { color: #a3362e; background: #fbe6e4; }

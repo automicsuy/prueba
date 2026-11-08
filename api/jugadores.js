@@ -50,6 +50,16 @@ async function player(id) {
   // En actividad: jugó esta temporada con un club, o tiene club y un próximo partido programado
   // (ESPN no tiene estadísticas de algunas ligas, como la uruguaya). Descarta retirados con perfil viejo.
   if (!club || (!clubSplits.length && !(a.active && ng))) return null;
+  // Partidos jugados por competición (el gamelog lista los partidos en que entró): suplente = jugados - titular.
+  await Promise.all(clubSplits.map(async sp => {
+    if (!sp.league) { sp.pj = sp.tit; sp.sup = 0; return; }
+    try {
+      const gl = await web(`${id}/gamelog?league=${encodeURIComponent(sp.league)}`);
+      const n = (gl.seasonTypes || []).flatMap(t => (t.categories || []).flatMap(c => c.events || []))
+        .filter(row => !NATIONAL.has(String(gl.events?.[row.eventId]?.team?.id))).length;
+      sp.pj = Math.max(n, sp.tit); sp.sup = sp.pj - sp.tit;
+    } catch { sp.pj = sp.tit; sp.sup = 0; }
+  }));
   const sum = k => clubSplits.reduce((n, sp) => n + sp[k], 0);
   // Forma: últimos partidos de club. El nivel sale de la liga principal del club (no de copas).
   const games = parseGameLog(ov.gameLog);
@@ -68,7 +78,7 @@ async function player(id) {
     pos,
     age: a.age || null,
     club: { id: String(club.id), name: club.displayName || club.name, logo: club.logos?.[0]?.href || '' },
-    temp: { tit: sum('tit'), g: sum('g'), a: sum('a'), sh: sum('sh'), sog: sum('sog'), ta: sum('ta'), tr: sum('tr') },
+    temp: { pj: sum('pj'), sup: sum('sup'), tit: sum('tit'), g: sum('g'), a: sum('a'), sh: sum('sh'), sog: sum('sog'), ta: sum('ta'), tr: sum('tr') },
     splits: clubSplits.map(({ team, ...rest }) => rest),
     form,
     next: ng ? { date: ng.date, name: ng.name, league: ov.nextGame.league.shortName || ov.nextGame.league.name } : null,

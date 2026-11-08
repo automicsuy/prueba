@@ -1,5 +1,5 @@
 // Service worker: red primero (siempre la última versión); caché solo como respaldo sin conexión.
-const VERSION = 'celestes-v15';
+const VERSION = 'celestes-v16';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'seleccion.js', 'share.js', 'prode.js', 'forma.js', 'fantasy.js', 'leagues.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png'];
 
 self.addEventListener('install', e => {
