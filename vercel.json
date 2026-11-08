@@ -1,7 +1,5 @@
 {
   "functions": {
-    "api/*.js": { "maxDuration": 60 },
-    "api/selecciones.js": { "maxDuration": 300 },
-    "api/jugadores.js": { "maxDuration": 300 }
+    "api/*.js": { "maxDuration": 300 }
   }
 }
