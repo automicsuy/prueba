@@ -1,10 +1,11 @@
 // TEMPORAL: inspección de estructuras de ESPN (se elimina antes de producción).
-const trim = (o, n = 2500) => JSON.stringify(o).slice(0, n);
+const trim = (o, n = 2500) => (o === undefined ? null : JSON.stringify(o).slice(0, n));
 async function get(u) {
   const r = await fetch(u, { headers: { 'user-agent': 'Mozilla/5.0', accept: 'application/json' } });
   return { status: r.status, body: r.ok ? await r.json() : await r.text() };
 }
-module.exports = async (req, res) => {
+module.exports = async (req, res) => { try { await main(req, res); } catch (e) { res.end(String(e.stack)); } };
+async function main(req, res) {
   const out = {};
   const sch = await get('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.friendly/teams/212/schedule?season=2024');
   const ev = (sch.body.events || [])[0];
@@ -26,4 +27,4 @@ module.exports = async (req, res) => {
   out.forlanOverview = trim(old.body.statistics, 800);
   res.setHeader('content-type', 'application/json');
   res.end(JSON.stringify(out, null, 1));
-};
+}
