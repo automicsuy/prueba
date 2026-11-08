@@ -20,6 +20,9 @@ const state = {
   disabled: new Set(store.get('disabled', [])),   // competiciones normales apagadas
   extrasOn: new Set(store.get('extrasOn', [])),   // "Más ligas" encendidas en la agenda
   uruAll: store.get('uruAll', false),
+  statsLevel: 'all',
+  statsSort: store.get('statsSort', 'selPj'),
+  statsQuery: '',
   errors: {},
 };
 const leagueOn = l => (l.extra ? state.extrasOn.has(l.id) : !state.disabled.has(l.id));
@@ -34,7 +37,7 @@ const fmtDayShort = new Intl.DateTimeFormat('es-UY', { weekday: 'short', day: 'n
 const fmtDayLong = new Intl.DateTimeFormat('es-UY', { weekday: 'long', day: 'numeric', month: 'long' });
 
 /* ---------- Datos (vía funciones propias en /api, que consultan ESPN del lado del servidor) ---------- */
-const APP_VERSION = '6';
+const APP_VERSION = '7';
 const memCache = new Map(); // url -> {t, data}
 async function getJSON(url, ttl = 60_000) {
   const hit = memCache.get(url);
@@ -258,6 +261,77 @@ async function renderUru() {
   list.innerHTML = parts.join('');
 }
 
+/* ---------- Estadísticas de jugadores ---------- */
+let statsData = null;
+async function loadStats() {
+  if (statsData) return statsData;
+  const data = await getJSON('api/jugadores', 6 * 3600_000);
+  statsData = data.players;
+  return statsData;
+}
+const selTot = (p, k) => (state.statsLevel === 'sub20' ? p.sub20?.[k] || 0 : state.statsLevel === 'mayor' ? p.mayor?.[k] || 0 : (p.mayor?.[k] || 0) + (p.sub20?.[k] || 0));
+const SORTS = {
+  selPj: (a, b) => selTot(b, 'pj') - selTot(a, 'pj'),
+  selG: (a, b) => selTot(b, 'g') - selTot(a, 'g') || selTot(b, 'pj') - selTot(a, 'pj'),
+  clubG: (a, b) => b.temp.g - a.temp.g || b.temp.a - a.temp.a,
+  clubA: (a, b) => b.temp.a - a.temp.a || b.temp.g - a.temp.g,
+  clubTit: (a, b) => b.temp.tit - a.temp.tit,
+  age: (a, b) => (a.age || 99) - (b.age || 99),
+  name: (a, b) => a.n.localeCompare(b.n),
+};
+const lvlTags = p => `${p.mayor ? '<b class="lvl mayor">Mayor</b>' : ''}${p.sub20 ? '<b class="lvl s20">Sub-20</b>' : ''}`;
+
+let statsReq = 0;
+async function renderStats() {
+  const box = $('#statsList');
+  const req = ++statsReq;
+  if (!statsData) box.innerHTML = `<p class="hint">Cargando jugadores… la primera vez puede tardar hasta un minuto.</p>` + skeleton(6);
+  let list;
+  try { list = await loadStats(); } catch (err) {
+    if (req === statsReq) box.innerHTML = `<div class="empty">No se pudieron cargar las estadísticas.<br><small>${esc(err.message)}</small><br><button class="btn" id="retryStats">Reintentar</button></div>`;
+    return;
+  }
+  if (req !== statsReq) return;
+  const q = norm(state.statsQuery);
+  let rows = list.filter(p => (state.statsLevel === 'all' || p[state.statsLevel]) && (!q || norm(p.n).includes(q) || norm(p.club.name).includes(q)));
+  rows = rows.slice().sort(SORTS[state.statsSort] || SORTS.selPj);
+  const lvlName = state.statsLevel === 'sub20' ? 'Sub-20' : state.statsLevel === 'mayor' ? 'Mayor' : 'Selección';
+  box.innerHTML = rows.length ? `<p class="hint">${rows.length} jugadores</p>
+    <div class="table-wrap"><table class="stats">
+      <thead><tr><th class="l">Jugador</th><th title="Partidos con la selección">PJ<small>${lvlName}</small></th><th title="Goles con la selección">G<small>${lvlName}</small></th><th title="Goles con el club esta temporada">G<small>club</small></th><th title="Asistencias con el club esta temporada">A<small>club</small></th></tr></thead>
+      <tbody>${rows.map(p => `<tr data-player="${esc(p.id)}">
+        <td class="l"><span class="pname">${esc(p.n)}</span><small>${p.club.logo ? `<img src="${esc(p.club.logo)}" alt="" width="14" height="14" loading="lazy">` : ''}${esc(p.club.name)}${p.age ? ' · ' + p.age : ''}</small><span class="tags">${lvlTags(p)}</span></td>
+        <td>${selTot(p, 'pj')}</td><td>${selTot(p, 'g')}</td><td>${p.temp.g}</td><td>${p.temp.a}</td></tr>`).join('')}</tbody>
+    </table></div>` : `<div class="empty">Sin resultados.</div>`;
+}
+
+function openPlayer(id) {
+  const p = statsData?.find(x => x.id === id);
+  if (!p) return;
+  const fmtDate = d => (d ? new Intl.DateTimeFormat('es-UY', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(d)) : '—');
+  const selBlock = (title, s) => s ? `<h4 class="dlg-sub">${title}</h4>
+    <div class="kpis"><div><b>${s.pj}</b><small>Partidos</small></div><div><b>${s.tit}</b><small>Titular</small></div><div><b>${s.g}</b><small>Goles</small></div><div><b>${s.a}</b><small>Asist.</small></div><div><b>${s.ta}</b><small>Amarillas</small></div><div><b>${s.tr}</b><small>Rojas</small></div></div>
+    <p class="hint">Último partido: ${fmtDate(s.last)}</p>` : '';
+  const dlg = $('#detail');
+  dlg.innerHTML = `<form method="dialog" class="dlg">
+    <header><small>${lvlTags(p)}</small><button class="icon-btn" value="close" aria-label="Cerrar">✕</button></header>
+    <div class="player-head">${p.club.logo ? `<img src="${esc(p.club.logo)}" alt="" width="48" height="48">` : ''}
+      <div><h3>${esc(p.n)}</h3><small>${esc(p.club.name)}${p.pos ? ' · ' + esc(p.pos) : ''}${p.age ? ' · ' + p.age + ' años' : ''}</small></div></div>
+    ${selBlock('🇺🇾 Selección Mayor', p.mayor)}
+    ${selBlock('🇺🇾 Sub-20', p.sub20)}
+    <h4 class="dlg-sub">Club · temporada actual</h4>
+    <div class="table-wrap"><table class="stats small">
+      <thead><tr><th class="l">Competición</th><th>Tit</th><th>G</th><th>A</th><th>Rem</th><th>Arco</th><th>TA</th><th>TR</th></tr></thead>
+      <tbody>${p.splits.map(sp => `<tr><td class="l">${esc(sp.name)}</td><td>${sp.tit}</td><td>${sp.g}</td><td>${sp.a}</td><td>${sp.sh}</td><td>${sp.sog}</td><td>${sp.ta}</td><td>${sp.tr}</td></tr>`).join('')}
+      <tr class="tot"><td class="l">Total</td><td>${p.temp.tit}</td><td>${p.temp.g}</td><td>${p.temp.a}</td><td>${p.temp.sh}</td><td>${p.temp.sog}</td><td>${p.temp.ta}</td><td>${p.temp.tr}</td></tr></tbody>
+    </table></div>
+    ${p.next ? `<h4 class="dlg-sub">Próximo partido</h4><p class="next">${esc(p.next.name)}<br><small>${esc(p.next.league)} · ${esc(cap(fmtDayLong.format(new Date(p.next.date))))}, ${fmtTime.format(new Date(p.next.date))}</small></p>` : ''}
+    <div class="actions"><a class="btn" href="${esc(p.link)}" target="_blank" rel="noopener">Ficha en ESPN ↗</a></div>
+  </form>`;
+  delete dlg.dataset.ev;
+  if (!dlg.open) dlg.showModal();
+}
+
 /* ---------- Mis equipos ---------- */
 function renderChips() {
   const favs = Object.values(state.favs);
@@ -404,6 +478,7 @@ function setTab(tab) {
   $('#dayNav').hidden = !(tab === 'agenda' || tab === 'uru');
   if (tab === 'agenda') renderAgenda();
   if (tab === 'uru') renderUru();
+  if (tab === 'stats') renderStats();
   if (tab === 'favs') renderFavs();
   if (tab === 'ajustes') renderSettings();
 }
@@ -418,6 +493,12 @@ document.addEventListener('click', ev => {
   if (el.id === 'prevDay') { state.day = addDays(state.day, -1); return rerenderCurrent(); }
   if (el.id === 'nextDay') { state.day = addDays(state.day, 1); return rerenderCurrent(); }
   if (el.matches('.day')) { state.day = addDays(state.day, +el.dataset.off); return rerenderCurrent(); }
+  if (el.id === 'retryStats') { memCache.clear(); statsData = null; return renderStats(); }
+  if (el.matches('#statsLevel button')) {
+    state.statsLevel = el.dataset.level;
+    document.querySelectorAll('#statsLevel button').forEach(b => b.classList.toggle('on', b === el));
+    return renderStats();
+  }
   if (el.id === 'retryUru') { memCache.clear(); uruCache.clear(); return renderUru(); }
   if (el.matches('#sportFilter button')) {
     state.sport = el.dataset.sport;
@@ -459,11 +540,18 @@ document.addEventListener('click', ev => {
   }
 });
 
-$('#detail').addEventListener('close', () => { if (state.tab !== 'ajustes') rerenderCurrent(); });
+$('#detail').addEventListener('close', () => { if (state.tab !== 'ajustes' && state.tab !== 'stats') rerenderCurrent(); });
 $('#detail').addEventListener('click', ev => { if (ev.target === ev.currentTarget) ev.currentTarget.close(); });
 
 $('#onlyFavs').checked = state.onlyFavs;
 $('#onlyFavs').addEventListener('change', ev => { state.onlyFavs = ev.target.checked; store.set('onlyFavs', state.onlyFavs); renderAgenda(); });
+
+// Filas de la tabla de jugadores (son <tr>, no botones).
+$('#statsList').addEventListener('click', ev => { const tr = ev.target.closest('tr[data-player]'); if (tr) openPlayer(tr.dataset.player); });
+$('#statsSort').value = state.statsSort;
+$('#statsSort').addEventListener('change', ev => { state.statsSort = ev.target.value; store.set('statsSort', state.statsSort); renderStats(); });
+let statsTimer;
+$('#statsSearch').addEventListener('input', ev => { clearTimeout(statsTimer); statsTimer = setTimeout(() => { state.statsQuery = ev.target.value; renderStats(); }, 150); });
 
 $('#uruAll').checked = state.uruAll;
 $('#uruAll').addEventListener('change', ev => { state.uruAll = ev.target.checked; store.set('uruAll', state.uruAll); renderUru(); });

@@ -27,18 +27,21 @@ async function uruEvents(leagues, teamId) {
     const data = await espn(`soccer/${l}/teams/${teamId}/schedule`, `season=${y}`);
     return (data.events || [])
       .filter(e => (e.competitions?.[0]?.status?.type?.state || e.status?.type?.state) === 'post')
-      .map(e => ({ id: String(e.id), league: l }));
+      .map(e => ({ id: String(e.id), league: l, date: e.date }));
   });
   const seen = new Map();
   res.flat().forEach(e => e && e.id && seen.set(e.id, e));
   return [...seen.values()];
 }
 
-// Jugadores de Uruguay que entraron a la cancha (titulares o suplentes que ingresaron).
+// Jugadores de Uruguay que entraron a la cancha (titulares o suplentes que ingresaron),
+// con sus números en la selección: partidos, titularidades, goles, asistencias, tarjetas.
 async function uruPlayers(events, teamId) {
   const players = new Map();
+  const stats = {};
+  const st = id => (stats[id] ||= { pj: 0, tit: 0, g: 0, a: 0, ta: 0, tr: 0, last: '' });
   let ok = 0;
-  await pool(events, 12, async ({ id, league }) => {
+  await pool(events, 12, async ({ id, league, date }) => {
     const data = await espn(`soccer/${league}/summary`, `event=${id}`);
     const team = (data.rosters || []).find(r => String(r.team?.id) === teamId);
     if (!team) return;
@@ -46,10 +49,26 @@ async function uruPlayers(events, teamId) {
     (team.roster || []).forEach(p => {
       const played = p.starter || p.subbedIn === true || p.subbedIn?.didSub === true;
       if (!played || !p.athlete?.id) return;
-      players.set(String(p.athlete.id), p.athlete.displayName);
+      const aid = String(p.athlete.id);
+      players.set(aid, p.athlete.displayName);
+      const s = st(aid);
+      s.pj++;
+      if (p.starter) s.tit++;
+      (p.plays || []).forEach(pl => {
+        if (pl.scoringPlay && !pl.ownGoal) s.g++;
+        if (pl.yellowCard) s.ta++;
+        if (pl.redCard) s.tr++;
+      });
+      if (date && date > s.last) s.last = date;
+    });
+    // Asistencias: segundo participante de cada gol de Uruguay en los eventos clave.
+    (data.keyEvents || []).forEach(k => {
+      if (!k.scoringPlay || String(k.team?.id) !== teamId || /own/i.test(k.type?.text || '')) return;
+      const assist = k.participants?.[1]?.athlete?.id;
+      if (assist && players.has(String(assist))) st(String(assist)).a++;
     });
   });
-  return { players, eventsWithLineup: ok };
+  return { players, stats, eventsWithLineup: ok };
 }
 
 const WD_TEAMS = { Q134916: 'mayor', Q2442864: 'sub20' };
@@ -85,6 +104,7 @@ async function buildSelecciones() {
     stats: { mayorEvents: mayorEv.length, mayorLineups: mayor.eventsWithLineup, mayorPlayers: mayor.players.size, sub20Events: sub20Ev.length, sub20Lineups: sub20.eventsWithLineup, sub20Players: sub20.players.size, wikidataDates: Object.keys(wd).length },
     mayor: Object.fromEntries(mayor.players),
     sub20: Object.fromEntries(sub20.players),
+    stats: { mayor: mayor.stats, sub20: sub20.stats },
     wd,
   };
 }
@@ -119,7 +139,7 @@ async function getSelecciones(host) {
       if (r.ok) data = await r.json();
     } catch { /* se calcula localmente */ }
   }
-  if (!data?.mayor) data = await buildSelecciones();
+  if (!data?.mayor || !data?.stats) data = await buildSelecciones();
   selCache = { t: Date.now(), data };
   return data;
 }

@@ -22,6 +22,7 @@
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="agenda" aria-selected="true">Agenda</button>
       <button role="tab" data-tab="uru" aria-selected="false" aria-label="Uruguayos">🇺🇾</button>
+      <button role="tab" data-tab="stats" aria-selected="false" aria-label="Estadísticas de jugadores">📊</button>
       <button role="tab" data-tab="favs" aria-selected="false">Equipos</button>
       <button role="tab" data-tab="ajustes" aria-selected="false" aria-label="Ajustes">⚙︎</button>
     </nav>
@@ -60,6 +61,32 @@
       </label>
     </div>
     <div id="uruList" class="list" aria-live="polite"></div>
+  </section>
+
+  <!-- ESTADÍSTICAS DE JUGADORES -->
+  <section id="view-stats" class="view" hidden>
+    <h2 class="section-title">Jugadores de la selección en actividad</h2>
+    <input type="search" id="statsSearch" placeholder="Buscar jugador o club…" autocomplete="off">
+    <div class="filters">
+      <div class="seg" id="statsLevel">
+        <button data-level="all" class="on">Todos</button>
+        <button data-level="mayor">Mayor</button>
+        <button data-level="sub20">Sub-20</button>
+      </div>
+      <label class="sort">Orden
+        <select id="statsSort">
+          <option value="selPj">Partidos selección</option>
+          <option value="selG">Goles selección</option>
+          <option value="clubG">Goles club (temporada)</option>
+          <option value="clubA">Asistencias club</option>
+          <option value="clubTit">Titular en club</option>
+          <option value="age">Más jóvenes</option>
+          <option value="name">Nombre</option>
+        </select>
+      </label>
+    </div>
+    <div id="statsList" aria-live="polite"></div>
+    <p class="hint">Selección: partidos de ESPN desde 2010. Club: temporada actual (todas las competiciones). Tocá un jugador para ver su ficha.</p>
   </section>
 
   <!-- FAVORITOS -->
