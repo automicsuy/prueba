@@ -91,7 +91,13 @@ module.exports = async (req, res) => {
       delete p.espnPhoto;
       p.mayor = sel.stats?.mayor?.[p.id] || (sel.mayor[p.id] ? { ...empty } : null);
       p.sub20 = sel.stats?.sub20?.[p.id] || (sel.sub20[p.id] ? { ...empty } : null);
+      // Perfiles cruzados de ESPN (homónimos): si "jugó" en la selección siendo un niño, no es la misma persona.
+      const ageAt = d => (p.dob && d ? (Date.parse(d) - Date.parse(p.dob)) / (365.25 * 86400_000) : null);
+      if (p.mayor?.last && ageAt(p.mayor.last) !== null && ageAt(p.mayor.last) < 15) p.mayor = null;
+      if (p.sub20?.last && ageAt(p.sub20.last) !== null && ageAt(p.sub20.last) < 13) p.sub20 = null;
     });
+    const clean = out.filter(p => p.mayor || p.sub20);
+    out.length = 0; out.push(...clean);
     await syncFantasy(out).catch(() => {});
     out.sort((x, y) => (y.mayor?.pj || 0) - (x.mayor?.pj || 0) || (y.sub20?.pj || 0) - (x.sub20?.pj || 0));
     res.setHeader('cache-control', 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
