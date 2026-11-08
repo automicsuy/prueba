@@ -46,27 +46,47 @@ async function uruPlayers(events, teamId) {
     const team = (data.rosters || []).find(r => String(r.team?.id) === teamId);
     if (!team) return;
     ok++;
+    const names = new Map(); // nombre → id (por si un evento clave no trae el ID)
     (team.roster || []).forEach(p => {
       const played = p.starter || p.subbedIn === true || p.subbedIn?.didSub === true;
       if (!played || !p.athlete?.id) return;
       const aid = String(p.athlete.id);
       players.set(aid, p.athlete.displayName);
+      names.set(p.athlete.displayName, aid);
       const s = st(aid);
       s.pj++;
       if (p.starter) s.tit++;
       (p.plays || []).forEach(pl => {
-        if (pl.scoringPlay && !pl.ownGoal) s.g++;
         if (pl.yellowCard) s.ta++;
         if (pl.redCard) s.tr++;
       });
       if (date && date > s.last) s.last = date;
     });
-    // Asistencias: segundo participante de cada gol de Uruguay en los eventos clave.
-    (data.keyEvents || []).forEach(k => {
-      if (!k.scoringPlay || String(k.team?.id) !== teamId || /own/i.test(k.type?.text || '')) return;
-      const assist = k.participants?.[1]?.athlete?.id;
-      if (assist && players.has(String(assist))) st(String(assist)).a++;
-    });
+    // Goles y asistencias: lista de goles del partido (sin definición por penales ni goles en contra).
+    const goals = (data.keyEvents || []).filter(k => k.scoringPlay);
+    if (goals.length) {
+      const idOf = part => {
+        const id = part?.athlete?.id && String(part.athlete.id);
+        return id && players.has(id) ? id : names.get(part?.athlete?.displayName);
+      };
+      goals.forEach(k => {
+        if (String(k.team?.id) !== teamId || k.shootout || /own/i.test(k.type?.text || '')) return;
+        const scorer = idOf(k.participants?.[0]);
+        const assist = idOf(k.participants?.[1]);
+        if (scorer) st(scorer).g++;
+        if (assist) st(assist).a++;
+      });
+    } else {
+      // Sin lista de goles: uso las marcas por jugador.
+      (team.roster || []).forEach(p => {
+        const aid = p.athlete?.id && String(p.athlete.id);
+        if (!aid || !players.has(aid)) return;
+        (p.plays || []).forEach(pl => {
+          if (pl.didScore && !pl.ownGoal) st(aid).g++;
+          if (pl.didAssist) st(aid).a++;
+        });
+      });
+    }
   });
   return { players, stats, eventsWithLineup: ok };
 }
