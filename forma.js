@@ -16,7 +16,8 @@ function formStrip(f) {
   const last = (f?.last || []).slice(0, 5).reverse();
   return `<span class="fstrip" aria-label="Últimos partidos">${last.map(m => `<i class="${m.st === 'T' ? 't' : 's'} ${m.g ? 'g' : m.a ? 'a' : m.cs ? 'c' : ''}" title="${esc(gameTitle(m))}">${m.g ? 'G' : m.a ? 'A' : m.cs ? '0' : ''}</i>`).join('')}</span>`;
 }
-const formChip = f => `<span class="fchip-i ${formTone(f.i)}"><b>${f.i}</b>${trendMark(f.t)}</span>`;
+const formChip = f => (f.i == null ? '<span class="fchip-i lo" title="Sin partidos registrados en los últimos 45 días"><b>s/d</b></span>'
+  : `<span class="fchip-i ${formTone(f.i)}"><b>${f.i}</b>${trendMark(f.t)}</span>`);
 
 async function viewForma(box, req) {
   box.innerHTML = loading('Midiendo cómo llegan…') + skeleton(5);
@@ -29,10 +30,10 @@ function paintForma(box = $('#selBody')) {
   const all = (statsData || []).filter(p => p.form && p.form.last?.length);
   const list = all.filter(p => (forma.scope === 'all' || (forma.scope === 'in' ? official.has(p.id) : !official.has(p.id)))
     && (forma.line === 'all' || lineOfPos(p.pos) === forma.line))
-    .sort((a, b) => b.form.i - a.form.i || b.form.t - a.form.t);
+    .sort((a, b) => (b.form.i ?? -1) - (a.form.i ?? -1) || b.form.t - a.form.t);
   // Los que "piden pista": buena forma y fuera de la lista del DT.
-  const knocking = all.filter(p => !official.has(p.id) && p.mayor && p.form.i >= 65).sort((a, b) => b.form.i - a.form.i).slice(0, 3);
-  const falling = all.filter(p => official.has(p.id) && (p.form.i < 45 || p.form.t < 0)).sort((a, b) => a.form.i - b.form.i).slice(0, 3);
+  const knocking = all.filter(p => !official.has(p.id) && p.mayor && p.form.i != null && p.form.i >= 65).sort((a, b) => b.form.i - a.form.i).slice(0, 3);
+  const falling = all.filter(p => official.has(p.id) && p.form.i != null && (p.form.i < 45 || p.form.t < 0)).sort((a, b) => a.form.i - b.form.i).slice(0, 3);
   const mini = (p, why) => `<button class="kn" data-player="${esc(p.id)}">${avatar(p, 'sm')}<span><b>${esc(shortName(p.n))}</b><small>${esc(why)}</small></span>${formChip(p.form)}</button>`;
   box.innerHTML = `
     <p class="section-sub">Índice de 0 a 100 con los últimos 5 partidos de <b class="plain">club</b>: rodaje (titular o suplente), aporte (goles, asistencias, tiros al arco; arqueros: vallas invictas y atajadas) y nivel de la liga.</p>
@@ -51,7 +52,7 @@ function paintForma(box = $('#selBody')) {
         ${formStrip(p.form)}</span>
       ${formChip(p.form)}
     </button>`).join('') || '<p class="kpi-note pad">Sin jugadores para este filtro.</p>'}</div>
-    <p class="foot">Fuente: últimos partidos registrados por ESPN. El índice no sabe de lesiones ni de decisiones tácticas: si un jugador no juega hace semanas, baja.</p>`;
+    <p class="foot">Fuente: últimos partidos registrados por ESPN. El índice no sabe de lesiones ni de decisiones tácticas: si un jugador no juega hace semanas, baja. «s/d»: sin partidos registrados en 45 días (lesión, falta de datos o sin club).</p>`;
 }
 
 /* ---------- Ficha: bloque de forma y "¿Lo convocás?" ---------- */
@@ -60,7 +61,8 @@ function formBlock(p) {
   if (!f || !f.last?.length) return '';
   return `<h4 class="dlg-sub">Cómo llega · últimos partidos de club</h4>
     <div class="fbox">
-      <div class="fbox-top">${formChip(f)}<div class="fparts">
+      ${f.i == null ? `<p class="kpi-note">Sin partidos registrados en los últimos ${f.off} días: puede estar lesionado o ESPN no tiene sus datos recientes.</p>` : ''}
+      <div class="fbox-top" ${f.i == null ? 'hidden' : ''}>${formChip(f)}<div class="fparts">
         <span><i style="width:${(f.r / 40) * 100}%"></i><small>Rodaje ${f.r}/40</small></span>
         <span><i style="width:${(f.a / 35) * 100}%"></i><small>Aporte ${f.a}/35</small></span>
         <span><i style="width:${(f.n / 25) * 100}%"></i><small>Nivel de liga ${f.n}/25</small></span>

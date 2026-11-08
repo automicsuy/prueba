@@ -92,7 +92,7 @@ module.exports = async (req, res) => {
       p.sub20 = sel.stats?.sub20?.[p.id] || (sel.sub20[p.id] ? { ...empty } : null);
     });
     out.sort((x, y) => (y.mayor?.pj || 0) - (x.mayor?.pj || 0) || (y.sub20?.pj || 0) - (x.sub20?.pj || 0));
-    res.setHeader('cache-control', 'public, max-age=0, s-maxage=21600, stale-while-revalidate=604800');
+    res.setHeader('cache-control', 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
     res.statusCode = 200;
     res.setHeader('content-type', 'application/json; charset=utf-8');
     res.end(JSON.stringify({ players: out, checked: ids.length, errors: Object.keys(errors).length, ms: Date.now() - t0, builtAt: new Date().toISOString() }));

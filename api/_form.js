@@ -53,8 +53,10 @@ function formIndex(games, pos, leagueSlug, now = Date.now()) {
   const last5 = games.slice(0, 5);
   if (!last5.length) return { index: 0, rodaje: 0, aporte: 0, nivel: 0, trend: 0, daysOff: null };
   const daysOff = Math.floor((now - Date.parse(last5[0].d)) / 86400_000);
+  // Sin partidos registrados en 45 días: no sabemos si está lesionado o si ESPN no tiene sus datos. No inventamos un número.
+  if (daysOff > 45) return { index: null, rodaje: 0, aporte: 0, nivel: 0, trend: 0, daysOff };
   // Sin jugar hace mucho: probablemente lesionado, suplente o sin club.
-  const fresh = daysOff <= 21 ? 1 : daysOff <= 35 ? 0.7 : daysOff <= 60 ? 0.4 : 0.15;
+  const fresh = daysOff <= 21 ? 1 : daysOff <= 35 ? 0.7 : 0.45;
   const p = partScores(last5, pos);
   const nivel = leagueTier(leagueSlug);
   const index = Math.round((p.rodaje * fresh) + (p.aporte * fresh) + nivel * (0.4 + 0.6 * fresh));
