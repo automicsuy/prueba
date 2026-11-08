@@ -12,7 +12,7 @@ module.exports = async (req, res) => {
     // Sigue redirecciones solo hacia hosts permitidos (Special:FilePath → upload.wikimedia.org).
     for (let i = 0; i < 3 && r.status >= 300 && r.status < 400; i++) {
       const next = new URL(r.headers.get('location'), url);
-      if (next.protocol !== 'https:' || !ALLOWED.test(next.hostname)) throw new Error('redirección no permitida');
+      if (next.protocol !== 'https:' || !ALLOWED.test(next.hostname)) throw new Error(`redirección no permitida: ${next.protocol}//${next.hostname}`);
       url = next;
       r = await fetch(url, { headers: { 'user-agent': 'CelestesApp/1.0 (app del hincha celeste)' }, redirect: 'manual', signal: AbortSignal.timeout(8000) });
     }
