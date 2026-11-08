@@ -1,7 +1,7 @@
 'use strict';
 // Celestes: los uruguayos de la selección — partidos, estadísticas, noticias y videos.
 
-const APP_VERSION = '9';
+const APP_VERSION = '10';
 const LEAGUES = window.LEAGUES;
 const LEAGUE_BY_ID = Object.fromEntries(LEAGUES.map(l => [l.id, l]));
 const $ = s => document.querySelector(s);
@@ -59,6 +59,11 @@ async function getJSON(url, ttl = 60_000) {
 const skeleton = n => Array.from({ length: n }, () => `<div class="skel"></div>`).join('');
 const errorBox = (msg, err, retryId) => `<div class="empty"><b>${msg}</b><small>${esc(err.message)}</small><button class="btn" id="${retryId}">${ic('refresh')}Reintentar</button></div>`;
 const loading = msg => `<p class="loading-note">${msg}</p>`;
+const initials = n => String(n || '').split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+// Avatar: foto si existe; si falla o no hay, quedan las iniciales debajo.
+const avatar = (p, cls = '') => `<span class="av ${cls}"><b>${esc(initials(p?.n))}</b>${p?.photo ? `<img src="${esc(p.photo)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</span>`;
+const playerById = id => statsData?.find(x => x.id === id) || null;
+const shortName = n => { const w = String(n).split(/\s+/); return w.length > 1 ? `${w[0][0]}. ${w.slice(1).join(' ')}` : n; };
 
 function hydrate(e) {
   const league = LEAGUE_BY_ID[e.league];
@@ -121,11 +126,13 @@ function playerChips(list, e) {
   return list.map(p => {
     const team = p.side === 'home' ? e.home.short : e.away.short;
     const lvl = p.m ? '<span class="tag mayor">Mayor</span>' : p.s20 ? '<span class="tag s20">Sub-20</span>' : '';
-    return `<li><span class="pname">${esc(p.n)}</span> <small>${esc(team)}${p.p ? ' · ' + esc(p.p) : ''}</small> ${lvl}</li>`;
+    const known = playerById(p.id);
+    return `<li ${known ? `data-player="${esc(p.id)}" tabindex="0"` : ''}>${avatar(known || p, 'xs')}<span class="pname">${esc(p.n)}</span><small>${esc(team)}${p.p ? ' · ' + esc(POS[p.p] || p.p) : ''}</small>${lvl}</li>`;
   }).join('');
 }
 
 let uruReq = 0;
+let lastUru = null;
 async function renderUru() {
   renderDays();
   setSub(SUBS.uru());
@@ -138,6 +145,14 @@ async function renderUru() {
     return;
   }
   if (req !== uruReq) return;
+  lastUru = d;
+  paintUru(d);
+  // Con la lista de jugadores llegan las fotos: se repinta sin volver a pedir los partidos.
+  if (!statsData) loadStats().then(() => { if (req === uruReq && state.tab === 'uru') paintUru(lastUru); }).catch(() => {});
+}
+
+function paintUru(d) {
+  const list = $('#uruList');
   d.events.forEach(e => currentEvents.set(e.id, e));
   const sel = d.events.filter(e => d.seleccion[e.id]);
   const withPlayers = d.events.filter(e => !d.seleccion[e.id] && shownPlayers(d.players[e.id] || []).length);
@@ -147,6 +162,31 @@ async function renderUru() {
   parts.push(`<p class="section-sub">${withPlayers.length || sel.length
     ? `${withPlayers.length} ${withPlayers.length === 1 ? 'partido' : 'partidos'} · ${total} ${total === 1 ? 'jugador' : 'jugadores'}${live ? ` · <b>${live} en vivo</b>` : ''}`
     : 'Sin partidos'}</p>`);
+
+  // Carrusel "Hoy juegan": jugadores de selección con su partido.
+  const featured = [];
+  const seenP = new Set();
+  withPlayers.slice().sort((a, b) => (b.state === 'in') - (a.state === 'in') || a.date - b.date).forEach(e => {
+    (d.players[e.id] || []).filter(p => p.m || p.s20).forEach(p => {
+      if (seenP.has(p.id)) return;
+      seenP.add(p.id);
+      const rival = p.side === 'home' ? e.away.short : e.home.short;
+      featured.push({ p, e, rival });
+    });
+  });
+  featured.sort((a, b) => (b.p.m - a.p.m) || (!!playerById(b.p.id)?.photo - !!playerById(a.p.id)?.photo));
+  if (featured.length) {
+    parts.push(`<div class="rail" role="list" aria-label="Hoy juegan">${featured.slice(0, 24).map(({ p, e, rival }) => {
+      const known = playerById(p.id);
+      return `<button class="rail-card" role="listitem" data-player="${esc(p.id)}" data-ev-fallback="${esc(e.id)}">
+        ${avatar(known || p, 'lg')}
+        <b>${esc(shortName(p.n))}</b>
+        <small>vs ${esc(rival)}</small>
+        <span class="rail-st">${e.state === 'in' ? `<i></i>${esc(e.detail || 'En vivo')}` : e.state === 'post' ? 'Final' : fmtTime.format(e.date)}</span>
+      </button>`;
+    }).join('')}</div>`);
+  }
+
   if (sel.length) {
     parts.push(`<div class="group sel"><h3 class="group-h">${ic('flag')}Selección uruguaya</h3><div class="card">${sel.map(e =>
       eventCard(e, `<span class="tag solid">${d.seleccion[e.id] === 'sub20' ? 'Sub-20' : 'Mayor'}</span>`)).join('')}</div></div>`);
@@ -238,19 +278,20 @@ async function renderStats() {
     return;
   }
   if (req !== statsReq) return;
+  setSub(`${list.length} jugadores en actividad`);
   const q = norm(state.statsQuery);
   const rows = list
     .filter(p => (state.statsLevel === 'all' || p[state.statsLevel]) && (!q || norm(p.n).includes(q) || norm(p.club.name).includes(q)))
     .sort(SORTS[state.statsSort] || SORTS.selPj);
-  const lvlName = state.statsLevel === 'sub20' ? 'Sub-20' : state.statsLevel === 'mayor' ? 'Mayor' : 'Selección';
-  setSub(`${list.length} jugadores en actividad`);
-  box.innerHTML = rows.length ? `<p class="count">${rows.length} ${rows.length === 1 ? 'jugador' : 'jugadores'}</p>
-    <div class="table-wrap"><table class="stats">
-      <thead><tr><th class="l">Jugador</th><th title="Partidos con la selección">PJ<small>${lvlName}</small></th><th title="Goles con la selección">G<small>${lvlName}</small></th><th title="Goles con el club esta temporada">G<small>club</small></th><th title="Asistencias con el club esta temporada">A<small>club</small></th></tr></thead>
-      <tbody>${rows.map(p => `<tr data-player="${esc(p.id)}">
-        <td class="l"><span class="pname">${esc(p.n)}</span><small>${p.club.logo ? `<img src="${esc(p.club.logo)}" alt="" width="14" height="14" loading="lazy">` : ''}${esc(p.club.name)}${p.age ? ' · ' + p.age : ''}</small><span class="tags">${lvlTags(p)}</span></td>
-        ${[selTot(p, 'pj'), selTot(p, 'g'), p.temp.g, p.temp.a].map(v => `<td class="n ${v ? '' : 'dim'}">${v}</td>`).join('')}</tr>`).join('')}</tbody>
-    </table></div>` : `<div class="empty"><b>Sin resultados</b><small>Probá con otro nombre o club.</small></div>`;
+  const lvlName = state.statsLevel === 'sub20' ? 'Sub-20' : state.statsLevel === 'mayor' ? 'Mayor' : 'Sel.';
+  box.innerHTML = rows.length ? `<div class="plist">
+      <div class="plist-head"><span>${rows.length} ${rows.length === 1 ? 'jugador' : 'jugadores'}</span><span title="Partidos con la selección">PJ<small>${lvlName}</small></span><span title="Goles con la selección">G<small>${lvlName}</small></span><span title="Goles con el club esta temporada">G<small>club</small></span></div>
+      ${rows.map(p => `<button class="prow" data-player="${esc(p.id)}">
+        ${avatar(p, 'md')}
+        <span class="pinfo"><b>${esc(p.n)}</b><small>${p.club.logo ? `<img src="${esc(p.club.logo)}" alt="" loading="lazy" onerror="this.remove()">` : ''}${esc(p.club.name)}${p.age ? ` · ${p.age} años` : ''}</small><span class="tags">${lvlTags(p)}</span></span>
+        ${[selTot(p, 'pj'), selTot(p, 'g'), p.temp.g].map(v => `<span class="pnum ${v ? '' : 'dim'}">${v}</span>`).join('')}
+      </button>`).join('')}
+    </div>` : `<div class="empty"><b>Sin resultados</b><small>Probá con otro nombre o club.</small></div>`;
 }
 
 function openPlayer(id) {
@@ -259,26 +300,32 @@ function openPlayer(id) {
   const selBlock = (title, s) => s ? `<h4 class="dlg-sub">${title}</h4>
     <div class="kpis"><div><b>${s.pj}</b><small>Partidos</small></div><div><b>${s.tit}</b><small>Titular</small></div><div><b>${s.g}</b><small>Goles</small></div><div><b>${s.a}</b><small>Asist.</small></div><div><b>${s.ta}</b><small>Amarillas</small></div><div><b>${s.tr}</b><small>Rojas</small></div></div>
     <p class="kpi-note">Último partido: ${fmtDate(s.last)}</p>` : '';
-  showDialog(`${dlgHead(lvlTags(p))}
-    <div class="player-head"><span class="crest">${p.club.logo ? `<img src="${esc(p.club.logo)}" alt="">` : ''}</span>
-      <div><h3>${esc(p.n)}</h3><small>${esc(p.club.name)}${p.pos ? ' · ' + esc(POS[p.pos] || p.pos) : ''}${p.age ? ' · ' + p.age + ' años' : ''}</small></div></div>
+  showDialog(`<div class="phero">
+      <button class="icon-btn phero-close" value="close" aria-label="Cerrar">${ic('close')}</button>
+      ${avatar(p, 'xl')}
+      <div class="phero-txt">
+        <span class="tags">${lvlTags(p)}</span>
+        <h3>${esc(p.n)}</h3>
+        <p>${p.club.logo ? `<img src="${esc(p.club.logo)}" alt="" onerror="this.remove()">` : ''}${esc(p.club.name)}${p.pos ? ' · ' + esc(POS[p.pos] || p.pos) : ''}${p.age ? ' · ' + p.age + ' años' : ''}</p>
+      </div>
+    </div>
     <div class="actions"><button class="btn filled" type="button" data-videos-of="${esc(p.id)}">${ic('play')}Videos</button><button class="btn" type="button" data-news-of="${esc(p.id)}">${ic('news')}Noticias</button></div>
     ${selBlock('Selección Mayor', p.mayor)}
     ${selBlock('Selección Sub-20', p.sub20)}
     <h4 class="dlg-sub">Club · temporada actual</h4>
-    <div class="table-wrap"><table class="stats small">
+    ${p.splits.length ? `<div class="table-wrap"><table class="stats small">
       <thead><tr><th class="l">Competición</th><th>Tit</th><th>G</th><th>A</th><th>Rem</th><th>Arco</th><th>TA</th><th>TR</th></tr></thead>
       <tbody>${p.splits.map(sp => `<tr><td class="l">${esc(sp.name)}</td><td>${sp.tit}</td><td>${sp.g}</td><td>${sp.a}</td><td>${sp.sh}</td><td>${sp.sog}</td><td>${sp.ta}</td><td>${sp.tr}</td></tr>`).join('')}
       <tr class="tot"><td class="l">Total</td><td>${p.temp.tit}</td><td>${p.temp.g}</td><td>${p.temp.a}</td><td>${p.temp.sh}</td><td>${p.temp.sog}</td><td>${p.temp.ta}</td><td>${p.temp.tr}</td></tr></tbody>
-    </table></div>
+    </table></div>` : `<p class="kpi-note">ESPN no tiene estadísticas de esta temporada para su liga.</p>`}
     ${p.next ? `<h4 class="dlg-sub">Próximo partido</h4><div class="next">${ic('calendar')}<div><b>${esc(p.next.name.replace(' at ', ' vs. '))}</b><small>${esc(p.next.league)} · ${esc(cap(fmtDayLong.format(new Date(p.next.date))))}, ${fmtTime.format(new Date(p.next.date))}</small></div></div>` : ''}
     <div id="playerNews"></div>
-    <div class="actions"><a class="btn text" href="${esc(p.link)}" target="_blank" rel="noopener">Ficha en ESPN${ic('external')}</a></div>`);
+    <div class="actions"><a class="btn text" href="${esc(p.link)}" target="_blank" rel="noopener">Ficha en ESPN${ic('external')}</a></div>`, 'pcard');
   // Últimas noticias del jugador.
   loadNews().then(d => {
     const items = d.items.filter(n => n.ids.includes(p.id)).slice(0, 4);
     const box = $('#playerNews');
-    if (box && items.length) box.innerHTML = `<h4 class="dlg-sub">Últimas noticias</h4><div class="news-list news-mini">${items.map(newsCard).join('')}</div>`;
+    if (box && items.length) box.innerHTML = `<h4 class="dlg-sub">Últimas noticias</h4><div class="news-list">${items.map(n => newsRow(n)).join('')}</div>`;
   }).catch(() => {});
 }
 
@@ -290,13 +337,23 @@ async function loadNews() {
   newsData = { t: Date.now(), d };
   return d;
 }
-function newsCard(n) {
-  const names = n.ids.map(id => newsData?.d.names[id]).filter(Boolean);
-  const mark = (n.src || '?').replace(/^(el|la|los|las)\s+/i, '').charAt(0).toUpperCase();
-  return `<a class="news" href="${esc(n.link)}" target="_blank" rel="noopener">
-    <span class="src-mark" aria-hidden="true">${esc(mark)}</span>
-    <div><b>${esc(n.t)}</b><small>${esc(n.src || '')} · ${ago(n.date)}</small>
-    ${names.length ? `<span class="tags">${names.slice(0, 3).map(x => `<span class="tag s20">${esc(x)}</span>`).join('')}</span>` : n.sel ? '<span class="tags"><span class="tag mayor">Selección</span></span>' : ''}</div>
+const favicon = n => n.domain ? `<img class="fav" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(n.domain)}&sz=64" alt="" loading="lazy" onerror="this.remove()">` : '';
+const newsTags = n => {
+  const people = n.ids.map(id => newsData?.d.people[id]).filter(Boolean);
+  return people.length ? `<span class="ntags">${people.slice(0, 3).map(p => `<span class="ntag">${avatar(p, 'xxs')}${esc(shortName(p.n))}</span>`).join('')}</span>`
+    : n.sel ? '<span class="ntags"><span class="ntag sel">Selección</span></span>' : '';
+};
+const newsMeta = n => `<span class="nmeta">${favicon(n)}<span>${esc(n.src || n.domain)}</span><span class="dot">·</span><span>${ago(n.date)}</span></span>`;
+function newsHero(n) {
+  return `<a class="nhero" href="${esc(n.link)}" target="_blank" rel="noopener">
+    <span class="nhero-img"><img src="${esc(n.img)}" alt="" referrerpolicy="no-referrer" onerror="this.parentNode.remove()"></span>
+    <span class="nhero-txt">${newsMeta(n)}<b>${esc(n.t)}</b>${n.desc ? `<p>${esc(n.desc)}</p>` : ''}${newsTags(n)}</span>
+  </a>`;
+}
+function newsRow(n) {
+  return `<a class="nrow" href="${esc(n.link)}" target="_blank" rel="noopener">
+    <span class="nrow-txt">${newsMeta(n)}<b>${esc(n.t)}</b>${n.desc ? `<p>${esc(n.desc)}</p>` : ''}${newsTags(n)}</span>
+    ${n.img ? `<span class="nrow-img"><img src="${esc(n.img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.remove()"></span>` : ''}
   </a>`;
 }
 let newsReq = 0;
@@ -310,15 +367,19 @@ async function renderNews() {
     return;
   }
   if (req !== newsReq) return;
-  // Selector: jugadores con noticias, ordenados por cantidad.
+  // Filtros: chips con la foto de cada jugador, ordenados por cantidad de notas.
   const counts = {};
   d.items.forEach(n => n.ids.forEach(id => { counts[id] = (counts[id] || 0) + 1; }));
-  const sel = $('#newsPlayer');
-  const opts = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([id, c]) => `<option value="${esc(id)}">${esc(d.names[id] || id)} (${c})</option>`);
-  sel.innerHTML = `<option value="">Todas las noticias (${d.items.length})</option><option value="sel">Solo selección</option>${opts.join('')}`;
-  sel.value = state.newsPlayer;
+  const chip = (val, label, extra = '') => `<button class="fchip ${state.newsPlayer === val ? 'on' : ''}" data-news-filter="${esc(val)}">${extra}${label}</button>`;
+  $('#newsFilters').innerHTML = chip('', 'Todas') + chip('sel', 'Selección')
+    + Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 40)
+      .map(([id, c]) => chip(id, `${esc(shortName(d.people[id]?.n || id))} <small>${c}</small>`, avatar(d.people[id], 'xxs'))).join('');
   const items = d.items.filter(n => !state.newsPlayer || (state.newsPlayer === 'sel' ? n.sel : n.ids.includes(state.newsPlayer)));
-  box.innerHTML = items.length ? `<div class="news-list">${items.slice(0, 150).map(newsCard).join('')}</div>` : `<div class="empty"><b>Sin noticias recientes</b><small>No hay notas de los últimos 10 días para este filtro.</small></div>`;
+  if (!items.length) { box.innerHTML = `<div class="empty"><b>Sin noticias recientes</b><small>No hay notas de los últimos 10 días para este filtro.</small></div>`; return; }
+  const heroIdx = items.findIndex(n => n.img);
+  const hero = heroIdx >= 0 ? items[heroIdx] : null;
+  const rest = items.filter((_, i) => i !== heroIdx).slice(0, 120);
+  box.innerHTML = `${hero ? newsHero(hero) : ''}<div class="news-list">${rest.map(newsRow).join('')}</div>`;
 }
 
 /* ---------- Videos ---------- */
@@ -368,9 +429,9 @@ const dlgHead = label => `<header class="dlg-head"><span>${label}</span><button 
 const SUBS = { uru: () => 'Uruguayos en la cancha', stats: () => statsData ? `${statsData.length} jugadores en actividad` : 'Jugadores en actividad', news: () => 'Últimos 10 días', videos: () => 'Goles, resúmenes y shorts' };
 function setSub(text) { $('#appbarSub').textContent = text; }
 
-function showDialog(html) {
+function showDialog(html, kind = '') {
   const dlg = $('#detail');
-  dlg.innerHTML = `<form method="dialog" class="dlg">${html}</form>`;
+  dlg.innerHTML = `<form method="dialog" class="dlg ${kind}">${html}</form>`;
   if (!dlg.open) dlg.showModal();
 }
 $('#detail').addEventListener('close', () => { $('#detail').innerHTML = ''; }); // corta el video al cerrar
@@ -401,19 +462,23 @@ document.addEventListener('click', ev => {
   if (el.dataset.ics) { ev.preventDefault(); return downloadICS(currentEvents.get(el.dataset.ics)); }
   if (el.dataset.video) return openVideo(el.dataset.video, el.dataset.title);
   if (el.dataset.videosOf) { ev.preventDefault(); $('#detail').close(); state.videoPlayer = el.dataset.videosOf; state.videoKind = 'all'; syncSeg('#videoKind', 'all'); fillPlayerSelects(); return setTab('videos'); }
+  if (el.dataset.newsFilter !== undefined) { state.newsPlayer = el.dataset.newsFilter; window.scrollTo({ top: 0 }); return renderNews(); }
+  if (el.dataset.player && !el.closest('#statsList')) { if (playerById(el.dataset.player)) return openPlayer(el.dataset.player); if (el.dataset.evFallback) { const e = currentEvents.get(el.dataset.evFallback); if (e) openEvent(e); } return; }
   if (el.dataset.newsOf) { ev.preventDefault(); $('#detail').close(); state.newsPlayer = el.dataset.newsOf; return setTab('news'); }
   if (el.matches('#statsLevel button')) { state.statsLevel = el.dataset.level; syncSeg('#statsLevel', el.dataset.level); return renderStats(); }
   if (el.matches('#videoKind button')) { state.videoKind = el.dataset.kind; syncSeg('#videoKind', el.dataset.kind); return renderVideos(); }
 });
 
-$('#statsList').addEventListener('click', ev => { const tr = ev.target.closest('tr[data-player]'); if (tr) openPlayer(tr.dataset.player); });
+$('#statsList').addEventListener('click', ev => { const row = ev.target.closest('[data-player]'); if (row) openPlayer(row.dataset.player); });
+// Jugadores dentro de las tarjetas de partido (son <li>, no botones).
+$('#uruList').addEventListener('click', ev => { const li = ev.target.closest('li[data-player]'); if (li) { ev.stopPropagation(); openPlayer(li.dataset.player); } });
 $('#statsSort').value = state.statsSort;
 $('#statsSort').addEventListener('change', ev => { state.statsSort = ev.target.value; store.set('statsSort', state.statsSort); renderStats(); });
 let statsTimer;
 $('#statsSearch').addEventListener('input', ev => { clearTimeout(statsTimer); statsTimer = setTimeout(() => { state.statsQuery = ev.target.value; renderStats(); }, 150); });
 $('#uruAll').checked = state.uruAll;
 $('#uruAll').addEventListener('change', ev => { state.uruAll = ev.target.checked; store.set('uruAll', state.uruAll); renderUru(); });
-$('#newsPlayer').addEventListener('change', ev => { state.newsPlayer = ev.target.value; renderNews(); });
+
 $('#videoPlayer').addEventListener('change', ev => { state.videoPlayer = ev.target.value; renderVideos(); });
 $('#appVersion').textContent = `Videos de YouTube (se actualizan cada 12 h). Versión ${APP_VERSION}.`;
 

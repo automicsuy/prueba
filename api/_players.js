@@ -9,7 +9,7 @@ async function getActivePlayers(host) {
   if (host) {
     try {
       const r = await fetch(`https://${host}/api/jugadores`, { headers: { accept: 'application/json' } });
-      if (r.ok) list = (await r.json()).players?.map(p => ({ id: p.id, n: p.n, club: p.club?.name || '', mayor: !!p.mayor, last: p.mayor?.last || p.sub20?.last || '' }));
+      if (r.ok) list = (await r.json()).players?.map(p => ({ id: p.id, n: p.n, club: p.club?.name || '', photo: p.photo || '', mayor: !!p.mayor, last: p.mayor?.last || p.sub20?.last || '' }));
     } catch { /* fallback */ }
   }
   if (!list?.length) {

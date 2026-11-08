@@ -57,7 +57,7 @@ module.exports = async (req, res) => {
       found[key] = athletes.flatMap(a => {
         const lv = l.sport === 'soccer' ? levelsFor(a, sel) : { mayor: false, sub20: false };
         if (!a.uru && !lv.mayor && !lv.sub20) return [];
-        return [{ n: a.name, p: a.pos, m: lv.mayor, s20: lv.sub20 }];
+        return [{ id: a.id, n: a.name, p: a.pos, m: lv.mayor, s20: lv.sub20 }];
       });
     } catch (err) {
       errors[`roster:${key}`] = String(err.message || err);

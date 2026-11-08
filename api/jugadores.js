@@ -2,6 +2,7 @@
 // con sus números en la selección (desde 2010) y en su club esta temporada.
 const { send } = require('./_lib');
 const { URU_TEAM_ID, URU_U20_TEAM_ID, getSelecciones, pool } = require('./_uru');
+const { photoIndex, findPhoto } = require('./_photos');
 
 const WEB = 'https://site.web.api.espn.com/apis/common/v3/sports/soccer/athletes';
 const NATIONAL = new Set([URU_TEAM_ID, URU_U20_TEAM_ID]);
@@ -48,9 +49,14 @@ async function player(id) {
   // (ESPN no tiene estadísticas de algunas ligas, como la uruguaya). Descarta retirados con perfil viejo.
   if (!club || (!clubSplits.length && !(a.active && ng))) return null;
   const sum = k => clubSplits.reduce((n, sp) => n + sp[k], 0);
+  // "22/7/1998" → "1998-07-22"
+  const dm = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(a.displayDOB || '');
+  const dob = dm ? `${dm[3]}-${dm[2].padStart(2, '0')}-${dm[1].padStart(2, '0')}` : '';
   return {
     id,
     n: a.displayName,
+    dob,
+    espnPhoto: a.headshot?.href || '',
     pos: a.position?.abbreviation || '',
     age: a.age || null,
     club: { id: String(club.id), name: club.displayName || club.name, logo: club.logos?.[0]?.href || '' },
@@ -64,7 +70,7 @@ async function player(id) {
 module.exports = async (req, res) => {
   const t0 = Date.now();
   try {
-    const sel = await getSelecciones(req.headers.host);
+    const [sel, photos] = await Promise.all([getSelecciones(req.headers.host), photoIndex().catch(() => null)]);
     const ids = [...new Set([...Object.keys(sel.mayor), ...Object.keys(sel.sub20)])];
     const errors = {};
     const out = (await pool(ids, 24, async id => {
@@ -72,6 +78,8 @@ module.exports = async (req, res) => {
     })).filter(p => p && !p.error);
     const empty = { pj: 0, tit: 0, g: 0, a: 0, ta: 0, tr: 0, last: '' };
     out.forEach(p => {
+      p.photo = (photos && findPhoto(photos, p.n, p.dob)) || p.espnPhoto || '';
+      delete p.espnPhoto;
       p.mayor = sel.stats?.mayor?.[p.id] || (sel.mayor[p.id] ? { ...empty } : null);
       p.sub20 = sel.stats?.sub20?.[p.id] || (sel.sub20[p.id] ? { ...empty } : null);
     });
