@@ -1,7 +1,7 @@
 {
-  "name": "Mi Agenda Deportiva",
-  "short_name": "Agenda",
-  "description": "Partidos de fútbol y básquet de tus ligas y equipos favoritos",
+  "name": "Celestes",
+  "short_name": "Celestes",
+  "description": "Los uruguayos de la selección: partidos, estadísticas, noticias y videos",
   "lang": "es",
   "start_url": "./",
   "scope": "./",

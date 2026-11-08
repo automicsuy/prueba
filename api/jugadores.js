@@ -23,7 +23,6 @@ const num = v => (v === undefined || v === null || v === '' ? 0 : Number(v) || 0
 async function player(id) {
   const [info, ov] = await Promise.all([web(id), web(`${id}/overview`)]);
   const a = info.athlete || {};
-  const club = a.team && !NATIONAL.has(String(a.team.id)) ? a.team : null;
   const stat = ov.statistics || {};
   const names = stat.names || [];
   const idx = n => names.indexOf(n);
@@ -36,7 +35,16 @@ async function player(id) {
     };
   });
   const clubSplits = splits.filter(sp => !NATIONAL.has(sp.team));
-  if (!a.active || !club || !clubSplits.length) return null; // retirado o sin actividad esta temporada
+  // Club: el del perfil, salvo que ESPN lo tenga asignado a la selección; en ese caso, el de sus estadísticas.
+  const teamNames = {};
+  (stat.filters || []).forEach(f => (f.options || []).forEach(o => { teamNames[String(o.value)] = o.displayValue; }));
+  let club = a.team && !NATIONAL.has(String(a.team.id)) ? a.team : null;
+  if (!club && clubSplits.length) {
+    const tid = clubSplits[0].team;
+    club = { id: tid, displayName: teamNames[tid] || clubSplits[0].name.replace(/^\S+\s+/, ''), logos: [{ href: `https://a.espncdn.com/i/teamlogos/soccer/500/${tid}.png` }] };
+  }
+  // En actividad: jugó esta temporada con un club, o el perfil lo marca activo con club.
+  if (!club || (!clubSplits.length && !a.active)) return null;
   const sum = k => clubSplits.reduce((n, sp) => n + sp[k], 0);
   const ng = ov.nextGame?.league?.events?.[0];
   return {

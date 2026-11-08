@@ -1,5 +1,5 @@
 // Service worker: red primero (siempre la última versión); caché solo como respaldo sin conexión.
-const VERSION = 'agenda-v7';
+const VERSION = 'celestes-v8';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'leagues.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png'];
 
 self.addEventListener('install', e => {

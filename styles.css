@@ -209,3 +209,33 @@ table.stats .tot td { font-weight: 700; }
 .next { margin: 0 0 10px; }
 .next small { color: var(--muted); }
 .dlg { max-height: 85vh; overflow-y: auto; }
+
+/* Noticias */
+.player-select { flex: 1 1 220px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font: inherit; font-size: 14px; max-width: 100%; }
+.news { display: flex; gap: 12px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 8px; color: var(--text); text-decoration: none; }
+.news:hover { border-color: var(--muted); }
+.news img { width: 84px; height: 64px; object-fit: cover; border-radius: 8px; flex: none; }
+.news b { display: block; font-size: 15px; line-height: 1.3; }
+.news small { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
+.news .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.ptag { font-style: normal; font-size: 11px; font-weight: 600; color: #9bd0f5; background: rgba(85, 181, 229, .12); border: 1px solid rgba(85, 181, 229, .3); border-radius: 999px; padding: 1px 7px; }
+.ptag.sel { color: #04263a; background: #55b5e5; }
+.news-mini .news { padding: 10px; }
+.live-txt { color: var(--live); }
+
+/* Videos */
+.vgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.vcard { text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; }
+.vcard:hover { border-color: var(--muted); }
+.vcard .thumb { position: relative; display: block; aspect-ratio: 16 / 9; background: #000; }
+.vcard .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vcard .thumb i { position: absolute; right: 6px; bottom: 6px; font-style: normal; font-size: 11px; font-weight: 700; background: rgba(0, 0, 0, .8); padding: 1px 6px; border-radius: 4px; }
+.vcard.is-short .thumb i { background: #ff0033; }
+.vcard b { padding: 8px 10px 2px; font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.vcard small { padding: 0 10px 10px; color: var(--muted); font-size: 12px; }
+.player { position: relative; aspect-ratio: 16 / 9; margin: 10px 0; background: #000; border-radius: 10px; overflow: hidden; }
+.player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+code { font-size: 12px; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+
+/* Pestañas: 4 en pantallas angostas */
+@media (max-width: 480px) { .tabs button { padding: 6px 9px; font-size: 13px; } }
