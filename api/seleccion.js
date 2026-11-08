@@ -6,6 +6,21 @@ const { photoIndex, findPhoto } = require('./_photos');
 
 const LEAGUES = ['fifa.friendly', 'fifa.worldq.conmebol', 'conmebol.america', 'fifa.world'];
 const LEAGUE_NAMES = { 'fifa.friendly': 'Amistoso', 'fifa.worldq.conmebol': 'Eliminatorias', 'conmebol.america': 'Copa América', 'fifa.world': 'Mundial' };
+// Nombres de selecciones en español (ESPN los da en inglés).
+const ES = { 'Argentina': 'Argentina', 'Brazil': 'Brasil', 'Chile': 'Chile', 'Colombia': 'Colombia', 'Ecuador': 'Ecuador', 'Paraguay': 'Paraguay', 'Peru': 'Perú',
+  'Bolivia': 'Bolivia', 'Venezuela': 'Venezuela', 'Mexico': 'México', 'United States': 'Estados Unidos', 'USA': 'Estados Unidos', 'Canada': 'Canadá',
+  'Costa Rica': 'Costa Rica', 'Panama': 'Panamá', 'Jamaica': 'Jamaica', 'Honduras': 'Honduras', 'Dominican Republic': 'República Dominicana',
+  'Spain': 'España', 'England': 'Inglaterra', 'France': 'Francia', 'Germany': 'Alemania', 'Italy': 'Italia', 'Portugal': 'Portugal', 'Netherlands': 'Países Bajos',
+  'Belgium': 'Bélgica', 'Croatia': 'Croacia', 'Switzerland': 'Suiza', 'Austria': 'Austria', 'Denmark': 'Dinamarca', 'Sweden': 'Suecia', 'Norway': 'Noruega',
+  'Poland': 'Polonia', 'Wales': 'Gales', 'Scotland': 'Escocia', 'Ireland': 'Irlanda', 'Republic of Ireland': 'Irlanda', 'Northern Ireland': 'Irlanda del Norte',
+  'Czechia': 'Chequia', 'Czech Republic': 'Chequia', 'Serbia': 'Serbia', 'Turkey': 'Turquía', 'Türkiye': 'Turquía', 'Greece': 'Grecia', 'Romania': 'Rumania',
+  'Ukraine': 'Ucrania', 'Hungary': 'Hungría', 'Russia': 'Rusia', 'Japan': 'Japón', 'South Korea': 'Corea del Sur', 'Korea Republic': 'Corea del Sur',
+  'China PR': 'China', 'Australia': 'Australia', 'Saudi Arabia': 'Arabia Saudita', 'Qatar': 'Catar', 'Iran': 'Irán', 'IR Iran': 'Irán', 'India': 'India',
+  'Morocco': 'Marruecos', 'Algeria': 'Argelia', 'Tunisia': 'Túnez', 'Egypt': 'Egipto', 'Senegal': 'Senegal', 'Nigeria': 'Nigeria', 'Ghana': 'Ghana',
+  'Cameroon': 'Camerún', 'Ivory Coast': 'Costa de Marfil', "Côte d'Ivoire": 'Costa de Marfil', 'South Africa': 'Sudáfrica', 'Cape Verde': 'Cabo Verde',
+  'New Zealand': 'Nueva Zelanda', 'Uzbekistan': 'Uzbekistán', 'Jordan': 'Jordania', 'Iraq': 'Irak', 'United Arab Emirates': 'Emiratos Árabes Unidos' };
+const es = n => ES[n] || n;
+
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
 // Partidos de Uruguay (pasados y futuros) de las últimas temporadas.
@@ -21,13 +36,33 @@ async function matches() {
   return [...seen.values()].sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
 }
 
+// Próximos partidos: el calendario de ESPN no trae los futuros, pero el equipo sí informa su
+// "próximo partido" por competición. Desde ahí se revisan los días siguientes de la misma fecha FIFA.
+async function upcomingMatches() {
+  const nexts = (await pool(LEAGUES, 4, async l => {
+    const d = await espn(`soccer/${l}/teams/${URU_TEAM_ID}`);
+    return (d.team?.nextEvent || []).map(ev => ({ ...compact(ev, l), comp: LEAGUE_NAMES[l] }));
+  })).flat().filter(e => e && e.id && e.home?.id);
+  if (!nexts.length) return [];
+  const first = Math.min(...nexts.map(e => Date.parse(e.date)));
+  const days = [];
+  for (let i = -1; i <= 12; i++) days.push(new Date(first + i * 86400_000).toISOString().slice(0, 10).replace(/-/g, ''));
+  const found = (await pool(['fifa.friendly', 'fifa.worldq.conmebol'].flatMap(l => days.map(d => ({ l, d }))), 12, async ({ l, d }) => {
+    const sb = await espn(`soccer/${l}/scoreboard`, `dates=${d}`);
+    return (sb.events || []).map(ev => ({ ...compact(ev, l), comp: LEAGUE_NAMES[l] })).filter(e => e.home.id === URU_TEAM_ID || e.away.id === URU_TEAM_ID);
+  })).flat().filter(e => e && e.id);
+  const all = new Map();
+  [...nexts, ...found].forEach(e => all.set(e.id, e));
+  return [...all.values()].sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+}
+
 const side = e => (e.home.id === URU_TEAM_ID ? { uru: e.home, rival: e.away, local: true } : { uru: e.away, rival: e.home, local: false });
 function shape(e) {
   const { uru, rival, local } = side(e);
   const gf = Number(uru.score), ga = Number(rival.score);
   return {
     id: e.id, date: e.date, state: e.state, comp: e.comp, venue: e.venue, city: e.city, link: e.link, tv: e.tv, local,
-    rival: { name: rival.name, short: rival.short, logo: rival.logo }, uruLogo: uru.logo,
+    rival: { name: es(rival.name), short: es(rival.short), logo: rival.logo }, uruLogo: uru.logo,
     gf: e.state === 'pre' ? null : gf, ga: e.state === 'pre' ? null : ga,
     res: e.state !== 'post' ? null : gf > ga ? 'G' : gf < ga ? 'P' : 'E',
   };
@@ -48,15 +83,18 @@ async function ensureWindow(win) {
 
 module.exports = async (req, res) => {
   try {
-    const [all, sel, photos, roster, playersRes] = await Promise.all([
+    const [all, future, sel, photos, roster, playersRes] = await Promise.all([
       matches(),
+      upcomingMatches().catch(() => []),
       getSelecciones(req.headers.host),
       photoIndex().catch(() => null),
       espn(`soccer/fifa.friendly/teams/${URU_TEAM_ID}/roster`).catch(() => ({})),
       fetch(`https://${req.headers.host}/api/jugadores`).then(r => (r.ok ? r.json() : null)).catch(() => null),
     ]);
     const now = Date.now();
-    const upcoming = all.filter(e => e.state !== 'post' && Date.parse(e.date) > now - 3 * 3600_000).map(shape);
+    const upMap = new Map();
+    [...all, ...future].filter(e => e.state !== 'post' && Date.parse(e.date) > now - 3 * 3600_000).forEach(e => upMap.set(e.id, e));
+    const upcoming = [...upMap.values()].sort((a, b) => Date.parse(a.date) - Date.parse(b.date)).map(shape);
     const past = all.filter(e => e.state === 'post').map(shape).reverse();
 
     // Balance de los últimos 12 meses.
