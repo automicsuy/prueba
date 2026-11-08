@@ -32,8 +32,13 @@ async function loadSel() {
 async function loadElig() {
   if (sel.elig) return sel.elig;
   const d = await getJSON('api/elegibles', 24 * 3600_000);
-  sel.elig = d.players;
-  sel.eligById = Object.fromEntries(d.players.map(p => [p.id, p]));
+  // Los convocados oficiales siempre se pueden elegir (aunque ESPN no los marque como uruguayos en su club).
+  const have = new Set(d.players.map(p => p.id));
+  const extra = (sel.data?.squad || []).filter(p => !have.has(p.id)).map(p => ({
+    id: p.id, n: p.n, pos: p.pos, age: p.age, club: p.club?.name || '', clubLogo: p.club?.logo || '', photo: p.photo || '', m: p.pj, s20: 0,
+  }));
+  sel.elig = [...extra, ...d.players];
+  sel.eligById = Object.fromEntries(sel.elig.map(p => [p.id, p]));
   return sel.elig;
 }
 // Datos de un jugador para mostrar (de elegibles, del plantel oficial o de la lista de jugadores).
