@@ -72,8 +72,8 @@ module.exports = async (req, res) => {
       if (seen.has(key)) continue;
       const ids = match(`${it.t} ${it.desc}`);
       const sel = SEL_RE.test(`${it.t} ${it.desc}`);
-      // Solo quedan las que mencionan a un jugador o a la selección (o vienen de las búsquedas generales).
-      if (!ids.length && !sel && !it.general) continue;
+      // Solo quedan las que mencionan a un jugador o a la selección.
+      if (!ids.length && !sel) continue;
       seen.add(key);
       items.push({ t: it.t, link: it.link, src: it.src, date: it.date, img: it.img, ids, sel });
     }

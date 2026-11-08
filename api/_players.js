@@ -26,8 +26,17 @@ async function getActivePlayers(host) {
 
 const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
+// Apellidos muy comunes: con ellos hay homónimos (p. ej. el Luis Suárez colombiano o el "Dibu" Emiliano Martínez).
+const COMMON = new Set(('rodriguez martinez gonzalez garcia perez fernandez lopez sanchez gomez diaz suarez romero silva alvarez '
+  + 'torres ramirez flores acosta benitez castro sosa ruiz hernandez morales vazquez pereira rojas gimenez nunez cabrera medina '
+  + 'herrera aguirre mendez viera santos dominguez gutierrez rios vega molina ortiz delgado ramos moreno jimenez blanco').split(' '));
+const UY_CONTEXT = /\b(uruguay|uruguayo|uruguaya|uruguayos|celeste|charrua|bielsa)\b/;
+const GENERIC_CLUB_WORDS = new Set(['club', 'deportivo', 'atletico', 'sporting', 'united', 'city', 'real', 'fc', 'cf', 'sc', 'ac', 'de', 'del', 'la', 'el', 'los', 'futbol', 'football']);
+const escRe = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // Arma un "matcher" que dice qué jugadores se mencionan en un texto:
-// nombre completo, o apellido si es distintivo (≥5 letras y único entre los jugadores).
+// - nombre completo; si el apellido es común, además tiene que aparecer su club o una referencia uruguaya;
+// - apellido solo, únicamente si es distintivo (≥5 letras, no común y único entre los jugadores).
 function playerMatcher(players) {
   const lastCount = {};
   const lastOf = p => norm(p.n).split(/\s+/).pop();
@@ -35,13 +44,19 @@ function playerMatcher(players) {
   const rules = players.map(p => {
     const full = norm(p.n);
     const last = lastOf(p);
+    const common = COMMON.has(last);
     const pats = [full];
-    if (last.length >= 5 && lastCount[last] === 1) pats.push(last);
-    return { id: p.id, re: new RegExp(`\\b(${pats.map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`) };
+    if (!common && last.length >= 5 && lastCount[last] === 1) pats.push(last);
+    const clubWords = norm(p.club).split(/[^a-z0-9]+/).filter(w => w.length >= 4 && !GENERIC_CLUB_WORDS.has(w));
+    return {
+      id: p.id,
+      re: new RegExp(`\\b(${pats.map(escRe).join('|')})\\b`),
+      ctx: common ? new RegExp(`\\b(${clubWords.map(escRe).join('|') || 'zzzz'})\\b`) : null,
+    };
   });
   return text => {
     const t = norm(text);
-    return rules.filter(r => r.re.test(t)).map(r => r.id);
+    return rules.filter(r => r.re.test(t) && (!r.ctx || r.ctx.test(t) || UY_CONTEXT.test(t))).map(r => r.id);
   };
 }
 
