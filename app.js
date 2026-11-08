@@ -1,13 +1,14 @@
 'use strict';
 // Celestes: los uruguayos de la selección — partidos, estadísticas, noticias y videos.
 
-const APP_VERSION = '8';
+const APP_VERSION = '9';
 const LEAGUES = window.LEAGUES;
 const LEAGUE_BY_ID = Object.fromEntries(LEAGUES.map(l => [l.id, l]));
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const ic = name => `<svg aria-hidden="true"><use href="#i-${name}"/></svg>`;
 
 /* ---------- Estado y almacenamiento local ---------- */
 const store = {
@@ -56,7 +57,8 @@ async function getJSON(url, ttl = 60_000) {
   return data;
 }
 const skeleton = n => Array.from({ length: n }, () => `<div class="skel"></div>`).join('');
-const errorBox = (msg, err, retryId) => `<div class="empty">${msg}<br><small>${esc(err.message)}</small><br><button class="btn" id="${retryId}">Reintentar</button></div>`;
+const errorBox = (msg, err, retryId) => `<div class="empty"><b>${msg}</b><small>${esc(err.message)}</small><button class="btn" id="${retryId}">${ic('refresh')}Reintentar</button></div>`;
+const loading = msg => `<p class="loading-note">${msg}</p>`;
 
 function hydrate(e) {
   const league = LEAGUE_BY_ID[e.league];
@@ -97,7 +99,7 @@ function eventCard(e, badge = '') {
   return `<button class="match ${e.state === 'in' ? 'is-live' : ''}" data-ev="${esc(e.id)}">
     <div class="m-status">${statusHTML(e)}${badge}</div>
     <div class="m-teams">${teamRow(e.home, e)}${teamRow(e.away, e)}</div>
-    ${e.tv.length ? `<div class="m-tv" title="${esc(e.tv.join(', '))}">📺 ${esc(e.tv.slice(0, 2).join(', '))}</div>` : ''}
+    ${e.tv.length ? `<div class="m-tv" title="${esc(e.tv.join(', '))}">${ic('tv')}<span>${esc(e.tv.slice(0, 2).join(', '))}</span></div>` : ''}
   </button>`;
 }
 function groupByLeague(events) {
@@ -118,7 +120,7 @@ function renderDays() {
 function playerChips(list, e) {
   return list.map(p => {
     const team = p.side === 'home' ? e.home.short : e.away.short;
-    const lvl = p.m ? '<b class="lvl mayor">Mayor</b>' : p.s20 ? '<b class="lvl s20">Sub-20</b>' : '';
+    const lvl = p.m ? '<span class="tag mayor">Mayor</span>' : p.s20 ? '<span class="tag s20">Sub-20</span>' : '';
     return `<li><span class="pname">${esc(p.n)}</span> <small>${esc(team)}${p.p ? ' · ' + esc(p.p) : ''}</small> ${lvl}</li>`;
   }).join('');
 }
@@ -126,9 +128,10 @@ function playerChips(list, e) {
 let uruReq = 0;
 async function renderUru() {
   renderDays();
+  setSub(SUBS.uru());
   const list = $('#uruList');
   const req = ++uruReq;
-  list.innerHTML = `<p class="hint">Revisando planteles… la primera vez del día puede tardar unos segundos.</p>` + skeleton(4);
+  list.innerHTML = loading('Revisando planteles… la primera vez del día puede tardar unos segundos.') + skeleton(4);
   let d;
   try { d = await fetchUru(state.day); } catch (err) {
     if (req === uruReq) list.innerHTML = errorBox('No se pudo revisar los planteles.', err, 'retryUru');
@@ -136,23 +139,25 @@ async function renderUru() {
   }
   if (req !== uruReq) return;
   d.events.forEach(e => currentEvents.set(e.id, e));
-  const parts = [`<h2 class="section-title">${esc(cap(fmtDayLong.format(state.day)))}</h2>`];
   const sel = d.events.filter(e => d.seleccion[e.id]);
-  if (sel.length) {
-    parts.push(`<div class="league uru-league"><h3>🇺🇾 Selección uruguaya</h3>${sel.map(e =>
-      eventCard(e, `<span class="uru-badge">${d.seleccion[e.id] === 'sub20' ? 'Sub-20' : 'Mayor'}</span>`)).join('')}</div>`);
-  }
   const withPlayers = d.events.filter(e => !d.seleccion[e.id] && shownPlayers(d.players[e.id] || []).length);
   const total = withPlayers.reduce((n, e) => n + shownPlayers(d.players[e.id]).length, 0);
   const live = withPlayers.filter(e => e.state === 'in').length;
-  if (withPlayers.length) parts.push(`<p class="hint">${withPlayers.length} ${withPlayers.length === 1 ? 'partido' : 'partidos'} · ${total} ${total === 1 ? 'jugador' : 'jugadores'}${live ? ` · <b class="live-txt">${live} en vivo</b>` : ''}</p>`);
+  const parts = [`<h2 class="section-title">${esc(cap(fmtDayLong.format(state.day)))}</h2>`];
+  parts.push(`<p class="section-sub">${withPlayers.length || sel.length
+    ? `${withPlayers.length} ${withPlayers.length === 1 ? 'partido' : 'partidos'} · ${total} ${total === 1 ? 'jugador' : 'jugadores'}${live ? ` · <b>${live} en vivo</b>` : ''}`
+    : 'Sin partidos'}</p>`);
+  if (sel.length) {
+    parts.push(`<div class="group sel"><h3 class="group-h">${ic('flag')}Selección uruguaya</h3><div class="card">${sel.map(e =>
+      eventCard(e, `<span class="tag solid">${d.seleccion[e.id] === 'sub20' ? 'Sub-20' : 'Mayor'}</span>`)).join('')}</div></div>`);
+  }
   for (const [id, evs] of groupByLeague(withPlayers)) {
     const l = LEAGUE_BY_ID[id];
-    parts.push(`<div class="league"><h3><span>${l.flag}</span> ${esc(l.name)}</h3>${evs.map(e =>
-      `<div class="uru-item">${eventCard(e)}<ul class="uru-players">${playerChips(shownPlayers(d.players[e.id]), e)}</ul></div>`).join('')}</div>`);
+    parts.push(`<div class="group"><h3 class="group-h">${esc(l.name)}</h3><div class="card">${evs.map(e =>
+      `<div class="uru-item">${eventCard(e)}<ul class="uru-players">${playerChips(shownPlayers(d.players[e.id]), e)}</ul></div>`).join('')}</div></div>`);
   }
   if (!sel.length && !withPlayers.length) {
-    parts.push(`<div class="empty">No hay partidos con uruguayos ${state.uruAll ? '' : 'de selección '}este día.${state.uruAll ? '' : '<br><small>Probá activar "Incluir otros uruguayos".</small>'}</div>`);
+    parts.push(`<div class="empty"><b>No juegan uruguayos ${state.uruAll ? '' : 'de selección '}este día</b>${state.uruAll ? '<small>Probá con otro día.</small>' : '<small>Probá otro día o activá "Incluir otros uruguayos".</small>'}</div>`);
   }
   list.innerHTML = parts.join('');
   scheduleRefresh(d.events);
@@ -167,21 +172,21 @@ function scheduleRefresh(events) {
 
 function openEvent(e) {
   const list = uruFor(e)?.players[e.id];
-  showDialog(`<header><small>${e.league.flag} ${esc(e.league.name)}${e.round ? ' · ' + esc(e.round) : ''}</small><button class="icon-btn" value="close" aria-label="Cerrar">✕</button></header>
+  showDialog(`${dlgHead(`${esc(e.league.name)}${e.round ? ' · ' + esc(e.round) : ''}`)}
     <div class="vs">
       <div>${e.home.logo ? `<img src="${esc(e.home.logo)}" alt="" width="56" height="56">` : ''}<b>${esc(e.home.name)}</b></div>
-      <div class="vs-mid">${e.state === 'pre' ? `<span class="big">${fmtTime.format(e.date)}</span>` : `<span class="big">${esc(e.home.score)} – ${esc(e.away.score)}</span>`}${statusHTML(e)}</div>
+      <div class="vs-mid">${e.state === 'pre' ? `<span class="big">${fmtTime.format(e.date)}</span>` : `<span class="big">${esc(e.home.score)} – ${esc(e.away.score)}</span>${statusHTML(e)}`}</div>
       <div>${e.away.logo ? `<img src="${esc(e.away.logo)}" alt="" width="56" height="56">` : ''}<b>${esc(e.away.name)}</b></div>
     </div>
     <ul class="facts">
-      <li>📅 ${esc(cap(fmtDayLong.format(e.date)))}, ${fmtTime.format(e.date)}</li>
-      ${e.venue ? `<li>📍 ${esc(e.venue)}${e.city ? ', ' + esc(e.city) : ''}</li>` : ''}
-      <li>📺 ${e.tv.length ? esc(e.tv.join(', ')) : 'Transmisión no informada'}</li>
+      <li>${ic('calendar')}${esc(cap(fmtDayLong.format(e.date)))}, ${fmtTime.format(e.date)}</li>
+      ${e.venue ? `<li>${ic('pin')}${esc(e.venue)}${e.city ? ', ' + esc(e.city) : ''}</li>` : ''}
+      <li>${ic('tv')}${e.tv.length ? esc(e.tv.join(', ')) : 'Transmisión no informada'}</li>
     </ul>
-    ${list?.length ? `<h4 class="dlg-sub">🇺🇾 Uruguayos en los planteles</h4><ul class="uru-players">${playerChips(list, e)}</ul>` : ''}
+    ${list?.length ? `<h4 class="dlg-sub">Uruguayos en los planteles</h4><ul class="uru-players in-dlg">${playerChips(list, e)}</ul>` : ''}
     <div class="actions">
-      ${e.state === 'pre' ? `<button class="btn" type="button" data-ics="${esc(e.id)}">🗓️ Agregar al calendario</button>` : ''}
-      ${e.link ? `<a class="btn" href="${esc(e.link)}" target="_blank" rel="noopener">Ficha completa ↗</a>` : ''}
+      ${e.state === 'pre' ? `<button class="btn filled" type="button" data-ics="${esc(e.id)}">${ic('calendar')}Agregar al calendario</button>` : ''}
+      ${e.link ? `<a class="btn text" href="${esc(e.link)}" target="_blank" rel="noopener">Ficha en ESPN${ic('external')}</a>` : ''}
     </div>`);
 }
 
@@ -220,13 +225,13 @@ const SORTS = {
   age: (a, b) => (a.age || 99) - (b.age || 99),
   name: (a, b) => a.n.localeCompare(b.n),
 };
-const lvlTags = p => `${p.mayor ? '<b class="lvl mayor">Mayor</b>' : ''}${p.sub20 ? '<b class="lvl s20">Sub-20</b>' : ''}`;
+const lvlTags = p => `${p.mayor ? '<span class="tag mayor">Mayor</span>' : ''}${p.sub20 ? '<span class="tag s20">Sub-20</span>' : ''}`;
 
 let statsReq = 0;
 async function renderStats() {
   const box = $('#statsList');
   const req = ++statsReq;
-  if (!statsData) box.innerHTML = `<p class="hint">Cargando jugadores… la primera vez puede tardar hasta un minuto.</p>` + skeleton(6);
+  if (!statsData) box.innerHTML = loading('Cargando jugadores… la primera vez puede tardar hasta un minuto.') + skeleton(6);
   let list;
   try { list = await loadStats(); } catch (err) {
     if (req === statsReq) box.innerHTML = errorBox('No se pudieron cargar las estadísticas.', err, 'retryStats');
@@ -238,13 +243,14 @@ async function renderStats() {
     .filter(p => (state.statsLevel === 'all' || p[state.statsLevel]) && (!q || norm(p.n).includes(q) || norm(p.club.name).includes(q)))
     .sort(SORTS[state.statsSort] || SORTS.selPj);
   const lvlName = state.statsLevel === 'sub20' ? 'Sub-20' : state.statsLevel === 'mayor' ? 'Mayor' : 'Selección';
-  box.innerHTML = rows.length ? `<p class="hint">${rows.length} jugadores en actividad</p>
+  setSub(`${list.length} jugadores en actividad`);
+  box.innerHTML = rows.length ? `<p class="count">${rows.length} ${rows.length === 1 ? 'jugador' : 'jugadores'}</p>
     <div class="table-wrap"><table class="stats">
       <thead><tr><th class="l">Jugador</th><th title="Partidos con la selección">PJ<small>${lvlName}</small></th><th title="Goles con la selección">G<small>${lvlName}</small></th><th title="Goles con el club esta temporada">G<small>club</small></th><th title="Asistencias con el club esta temporada">A<small>club</small></th></tr></thead>
       <tbody>${rows.map(p => `<tr data-player="${esc(p.id)}">
         <td class="l"><span class="pname">${esc(p.n)}</span><small>${p.club.logo ? `<img src="${esc(p.club.logo)}" alt="" width="14" height="14" loading="lazy">` : ''}${esc(p.club.name)}${p.age ? ' · ' + p.age : ''}</small><span class="tags">${lvlTags(p)}</span></td>
-        <td>${selTot(p, 'pj')}</td><td>${selTot(p, 'g')}</td><td>${p.temp.g}</td><td>${p.temp.a}</td></tr>`).join('')}</tbody>
-    </table></div>` : `<div class="empty">Sin resultados.</div>`;
+        ${[selTot(p, 'pj'), selTot(p, 'g'), p.temp.g, p.temp.a].map(v => `<td class="n ${v ? '' : 'dim'}">${v}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table></div>` : `<div class="empty"><b>Sin resultados</b><small>Probá con otro nombre o club.</small></div>`;
 }
 
 function openPlayer(id) {
@@ -252,27 +258,27 @@ function openPlayer(id) {
   if (!p) return;
   const selBlock = (title, s) => s ? `<h4 class="dlg-sub">${title}</h4>
     <div class="kpis"><div><b>${s.pj}</b><small>Partidos</small></div><div><b>${s.tit}</b><small>Titular</small></div><div><b>${s.g}</b><small>Goles</small></div><div><b>${s.a}</b><small>Asist.</small></div><div><b>${s.ta}</b><small>Amarillas</small></div><div><b>${s.tr}</b><small>Rojas</small></div></div>
-    <p class="hint">Último partido: ${fmtDate(s.last)}</p>` : '';
-  showDialog(`<header><small>${lvlTags(p)}</small><button class="icon-btn" value="close" aria-label="Cerrar">✕</button></header>
-    <div class="player-head">${p.club.logo ? `<img src="${esc(p.club.logo)}" alt="" width="48" height="48">` : ''}
-      <div><h3>${esc(p.n)}</h3><small>${esc(p.club.name)}${p.pos ? ' · ' + esc(p.pos) : ''}${p.age ? ' · ' + p.age + ' años' : ''}</small></div></div>
-    <div class="actions"><button class="btn" type="button" data-videos-of="${esc(p.id)}">▶️ Videos</button><button class="btn" type="button" data-news-of="${esc(p.id)}">📰 Noticias</button></div>
-    ${selBlock('🇺🇾 Selección Mayor', p.mayor)}
-    ${selBlock('🇺🇾 Sub-20', p.sub20)}
+    <p class="kpi-note">Último partido: ${fmtDate(s.last)}</p>` : '';
+  showDialog(`${dlgHead(lvlTags(p))}
+    <div class="player-head"><span class="crest">${p.club.logo ? `<img src="${esc(p.club.logo)}" alt="">` : ''}</span>
+      <div><h3>${esc(p.n)}</h3><small>${esc(p.club.name)}${p.pos ? ' · ' + esc(POS[p.pos] || p.pos) : ''}${p.age ? ' · ' + p.age + ' años' : ''}</small></div></div>
+    <div class="actions"><button class="btn filled" type="button" data-videos-of="${esc(p.id)}">${ic('play')}Videos</button><button class="btn" type="button" data-news-of="${esc(p.id)}">${ic('news')}Noticias</button></div>
+    ${selBlock('Selección Mayor', p.mayor)}
+    ${selBlock('Selección Sub-20', p.sub20)}
     <h4 class="dlg-sub">Club · temporada actual</h4>
     <div class="table-wrap"><table class="stats small">
       <thead><tr><th class="l">Competición</th><th>Tit</th><th>G</th><th>A</th><th>Rem</th><th>Arco</th><th>TA</th><th>TR</th></tr></thead>
       <tbody>${p.splits.map(sp => `<tr><td class="l">${esc(sp.name)}</td><td>${sp.tit}</td><td>${sp.g}</td><td>${sp.a}</td><td>${sp.sh}</td><td>${sp.sog}</td><td>${sp.ta}</td><td>${sp.tr}</td></tr>`).join('')}
       <tr class="tot"><td class="l">Total</td><td>${p.temp.tit}</td><td>${p.temp.g}</td><td>${p.temp.a}</td><td>${p.temp.sh}</td><td>${p.temp.sog}</td><td>${p.temp.ta}</td><td>${p.temp.tr}</td></tr></tbody>
     </table></div>
-    ${p.next ? `<h4 class="dlg-sub">Próximo partido</h4><p class="next">${esc(p.next.name)}<br><small>${esc(p.next.league)} · ${esc(cap(fmtDayLong.format(new Date(p.next.date))))}, ${fmtTime.format(new Date(p.next.date))}</small></p>` : ''}
+    ${p.next ? `<h4 class="dlg-sub">Próximo partido</h4><div class="next">${ic('calendar')}<div><b>${esc(p.next.name.replace(' at ', ' vs. '))}</b><small>${esc(p.next.league)} · ${esc(cap(fmtDayLong.format(new Date(p.next.date))))}, ${fmtTime.format(new Date(p.next.date))}</small></div></div>` : ''}
     <div id="playerNews"></div>
-    <div class="actions"><a class="btn" href="${esc(p.link)}" target="_blank" rel="noopener">Ficha en ESPN ↗</a></div>`);
+    <div class="actions"><a class="btn text" href="${esc(p.link)}" target="_blank" rel="noopener">Ficha en ESPN${ic('external')}</a></div>`);
   // Últimas noticias del jugador.
   loadNews().then(d => {
     const items = d.items.filter(n => n.ids.includes(p.id)).slice(0, 4);
     const box = $('#playerNews');
-    if (box && items.length) box.innerHTML = `<h4 class="dlg-sub">Últimas noticias</h4><div class="news-mini">${items.map(newsCard).join('')}</div>`;
+    if (box && items.length) box.innerHTML = `<h4 class="dlg-sub">Últimas noticias</h4><div class="news-list news-mini">${items.map(newsCard).join('')}</div>`;
   }).catch(() => {});
 }
 
@@ -286,17 +292,18 @@ async function loadNews() {
 }
 function newsCard(n) {
   const names = n.ids.map(id => newsData?.d.names[id]).filter(Boolean);
+  const mark = (n.src || '?').replace(/^(el|la|los|las)\s+/i, '').charAt(0).toUpperCase();
   return `<a class="news" href="${esc(n.link)}" target="_blank" rel="noopener">
-    ${n.img ? `<img src="${esc(n.img)}" alt="" loading="lazy">` : ''}
+    <span class="src-mark" aria-hidden="true">${esc(mark)}</span>
     <div><b>${esc(n.t)}</b><small>${esc(n.src || '')} · ${ago(n.date)}</small>
-    ${names.length ? `<span class="tags">${names.slice(0, 3).map(x => `<i class="ptag">${esc(x)}</i>`).join('')}</span>` : n.sel ? '<span class="tags"><i class="ptag sel">Selección</i></span>' : ''}</div>
+    ${names.length ? `<span class="tags">${names.slice(0, 3).map(x => `<span class="tag s20">${esc(x)}</span>`).join('')}</span>` : n.sel ? '<span class="tags"><span class="tag mayor">Selección</span></span>' : ''}</div>
   </a>`;
 }
 let newsReq = 0;
 async function renderNews() {
   const box = $('#newsList');
   const req = ++newsReq;
-  if (!newsData) box.innerHTML = `<p class="hint">Juntando noticias…</p>` + skeleton(5);
+  if (!newsData) box.innerHTML = loading('Juntando noticias…') + skeleton(5);
   let d;
   try { d = await loadNews(); } catch (err) {
     if (req === newsReq) box.innerHTML = errorBox('No se pudieron cargar las noticias.', err, 'retryNews');
@@ -311,7 +318,7 @@ async function renderNews() {
   sel.innerHTML = `<option value="">Todas las noticias (${d.items.length})</option><option value="sel">Solo selección</option>${opts.join('')}`;
   sel.value = state.newsPlayer;
   const items = d.items.filter(n => !state.newsPlayer || (state.newsPlayer === 'sel' ? n.sel : n.ids.includes(state.newsPlayer)));
-  box.innerHTML = items.length ? items.slice(0, 150).map(newsCard).join('') : `<div class="empty">Sin noticias recientes para este filtro.</div>`;
+  box.innerHTML = items.length ? `<div class="news-list">${items.slice(0, 150).map(newsCard).join('')}</div>` : `<div class="empty"><b>Sin noticias recientes</b><small>No hay notas de los últimos 10 días para este filtro.</small></div>`;
 }
 
 /* ---------- Videos ---------- */
@@ -322,7 +329,7 @@ async function renderVideos() {
   const box = $('#videoList');
   const req = ++videoReq;
   loadStats().catch(() => {}); // para llenar el selector de jugadores
-  box.innerHTML = `<p class="hint">Buscando videos…</p>` + skeleton(4);
+  box.innerHTML = loading('Buscando videos…') + skeleton(4);
   let d;
   try { d = await getJSON(`api/videos${state.videoPlayer ? `?player=${encodeURIComponent(state.videoPlayer)}` : ''}`, 6 * 3600_000); } catch (err) {
     if (req === videoReq) box.innerHTML = errorBox('No se pudieron cargar los videos.', err, 'retryVideos');
@@ -330,7 +337,7 @@ async function renderVideos() {
   }
   if (req !== videoReq) return;
   if (d.error === 'no_key') {
-    box.innerHTML = `<div class="empty"><b>Falta la clave de YouTube.</b><br><small>Para ver videos hay que cargar una clave gratuita de la API de YouTube en Vercel (variable <code>YOUTUBE_API_KEY</code>).</small></div>`;
+    box.innerHTML = `<div class="empty"><b>Los videos todavía no están activados</b><small>Falta cargar la clave gratuita de YouTube en Vercel (variable <code>YOUTUBE_API_KEY</code>).</small></div>`;
     return;
   }
   if (d.error) { box.innerHTML = errorBox('YouTube devolvió un error.', new Error(d.error), 'retryVideos'); return; }
@@ -338,12 +345,12 @@ async function renderVideos() {
   box.innerHTML = vids.length ? `<div class="vgrid">${vids.map(v => `<button class="vcard ${v.kind === 'short' ? 'is-short' : ''}" data-video="${esc(v.id)}" data-title="${esc(v.t)}">
       <span class="thumb"><img src="${esc(v.thumb)}" alt="" loading="lazy"><i>${v.kind === 'short' ? 'Short' : fmtSecs(v.secs)}</i></span>
       <b>${esc(v.t)}</b><small>${esc(v.ch)} · ${ago(v.date)} · ${KIND_LABEL[v.kind] || ''}</small>
-    </button>`).join('')}</div>` : `<div class="empty">No hay videos recientes${state.videoKind !== 'all' ? ' de este tipo' : ''}.</div>`;
+    </button>`).join('')}</div>` : `<div class="empty"><b>Sin videos recientes</b><small>${state.videoKind !== 'all' ? 'Probá con otro tipo de video.' : 'No encontramos videos de las últimas semanas.'}</small></div>`;
 }
 function openVideo(id, title) {
-  showDialog(`<header><small>${esc(title)}</small><button class="icon-btn" value="close" aria-label="Cerrar">✕</button></header>
+  showDialog(`${dlgHead(esc(title))}
     <div class="player"><iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?autoplay=1&rel=0" title="${esc(title)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>
-    <div class="actions"><a class="btn" href="https://www.youtube.com/watch?v=${encodeURIComponent(id)}" target="_blank" rel="noopener">Abrir en YouTube ↗</a></div>`);
+    <div class="actions"><a class="btn text" href="https://www.youtube.com/watch?v=${encodeURIComponent(id)}" target="_blank" rel="noopener">Abrir en YouTube${ic('external')}</a></div>`);
 }
 
 function fillPlayerSelects() {
@@ -356,6 +363,11 @@ function fillPlayerSelects() {
 }
 
 /* ---------- UI general ---------- */
+const POS = { G: 'Arquero', D: 'Defensa', M: 'Mediocampista', F: 'Delantero' };
+const dlgHead = label => `<header class="dlg-head"><span>${label}</span><button class="icon-btn" value="close" aria-label="Cerrar">${ic('close')}</button></header>`;
+const SUBS = { uru: () => 'Uruguayos en la cancha', stats: () => statsData ? `${statsData.length} jugadores en actividad` : 'Jugadores en actividad', news: () => 'Últimos 10 días', videos: () => 'Goles, resúmenes y shorts' };
+function setSub(text) { $('#appbarSub').textContent = text; }
+
 function showDialog(html) {
   const dlg = $('#detail');
   dlg.innerHTML = `<form method="dialog" class="dlg">${html}</form>`;
@@ -366,9 +378,9 @@ $('#detail').addEventListener('click', ev => { if (ev.target === ev.currentTarge
 
 function setTab(tab) {
   state.tab = tab;
-  document.querySelectorAll('.tabs [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+  document.querySelectorAll('.navbar button').forEach(b => (b.dataset.tab === tab ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
   document.querySelectorAll('section.view').forEach(v => (v.hidden = v.id !== `view-${tab}`));
-  $('#dayNav').hidden = tab !== 'uru';
+  setSub(SUBS[tab]());
   window.scrollTo(0, 0);
   ({ uru: renderUru, stats: renderStats, news: renderNews, videos: renderVideos })[tab]();
 }
@@ -377,7 +389,7 @@ function syncSeg(sel, val) { document.querySelectorAll(`${sel} button`).forEach(
 document.addEventListener('click', ev => {
   const el = ev.target.closest('button, a');
   if (!el) return;
-  if (el.matches('.tabs [role=tab]')) return setTab(el.dataset.tab);
+  if (el.matches('.navbar button')) return setTab(el.dataset.tab);
   if (el.id === 'prevDay') { state.day = addDays(state.day, -1); return renderUru(); }
   if (el.id === 'nextDay') { state.day = addDays(state.day, 1); return renderUru(); }
   if (el.matches('.day')) { state.day = addDays(state.day, +el.dataset.off); return renderUru(); }
@@ -404,6 +416,9 @@ $('#uruAll').addEventListener('change', ev => { state.uruAll = ev.target.checked
 $('#newsPlayer').addEventListener('change', ev => { state.newsPlayer = ev.target.value; renderNews(); });
 $('#videoPlayer').addEventListener('change', ev => { state.videoPlayer = ev.target.value; renderVideos(); });
 $('#appVersion').textContent = `Videos de YouTube (se actualizan cada 12 h). Versión ${APP_VERSION}.`;
+
+// La barra superior muestra un borde al desplazarse.
+addEventListener('scroll', () => $('.appbar').classList.toggle('scrolled', scrollY > 4), { passive: true });
 
 document.addEventListener('visibilitychange', () => { if (!document.hidden && state.tab === 'uru') renderUru(); });
 

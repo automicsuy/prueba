@@ -3,99 +3,138 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b0f14">
+  <meta name="theme-color" content="#ffffff">
   <meta name="description" content="Los uruguayos de la selección: partidos, estadísticas, noticias y videos">
   <title>Celestes</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="top">
-    <div class="brand">
-      <img src="icons/icon.svg" alt="" width="28" height="28">
-      <h1>Celestes</h1>
+  <!-- Íconos (trazo uniforme 1.75) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-ball" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5l4 2.9-1.5 4.6h-5L8 10.4z"/><path d="M12 3v4.5M16 10.4l4.3-1.4M14.5 15l2.6 3.7M9.5 15l-2.6 3.7M8 10.4L3.7 9"/></symbol>
+      <symbol id="i-people" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 19.5c.8-3 3.2-4.6 6-4.6s5.2 1.6 6 4.6"/><path d="M16 4.8a3.3 3.3 0 010 6.4M18 14.6c1.6.6 2.6 2.1 3 4.9"/></symbol>
+      <symbol id="i-news" viewBox="0 0 24 24"><rect x="3" y="4" width="14" height="16" rx="2.5"/><path d="M17 8h1.5A2.5 2.5 0 0121 10.5V17a3 3 0 01-3 3H7"/><path d="M7 8.5h6M7 12h6M7 15.5h3.5"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="M10 9.4v5.2l4.6-2.6z"/></symbol>
+      <symbol id="i-tv" viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="12" rx="2.5"/><path d="M9 3l3 3.5L15 3"/></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+      <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5A7 7 0 005 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></symbol>
+      <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8.5 8.5M18 14v3.5a2.5 2.5 0 01-2.5 2.5h-9A2.5 2.5 0 014 17.5v-9A2.5 2.5 0 016.5 6H10"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+      <symbol id="i-left" viewBox="0 0 24 24"><path d="M14.5 5.5L8 12l6.5 6.5"/></symbol>
+      <symbol id="i-right" viewBox="0 0 24 24"><path d="M9.5 5.5L16 12l-6.5 6.5"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></symbol>
+      <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5.5 21V4"/><path d="M5.5 4.5h12l-2.5 4 2.5 4h-12"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2.3 5.7M20 4.5V11h-6.5"/></symbol>
+    </defs>
+  </svg>
+
+  <a class="skip" href="#main">Saltar al contenido</a>
+
+  <header class="appbar">
+    <div class="appbar-in">
+      <a class="brand" href="./" aria-label="Celestes, inicio">
+        <img src="icons/icon.svg" alt="" width="32" height="32">
+        <span>Celestes</span>
+      </a>
+      <p class="appbar-sub" id="appbarSub">Partidos de hoy</p>
     </div>
-    <nav class="tabs" role="tablist">
-      <button role="tab" data-tab="uru" aria-selected="true">Partidos</button>
-      <button role="tab" data-tab="stats" aria-selected="false">Jugadores</button>
-      <button role="tab" data-tab="news" aria-selected="false">Noticias</button>
-      <button role="tab" data-tab="videos" aria-selected="false">Videos</button>
-    </nav>
   </header>
 
-  <!-- PARTIDOS -->
-  <div id="dayNav" class="view daynav">
-    <div class="daybar">
-      <button class="icon-btn" id="prevDay" aria-label="Día anterior">‹</button>
-      <div class="days" id="days"></div>
-      <button class="icon-btn" id="nextDay" aria-label="Día siguiente">›</button>
-    </div>
-  </div>
-  <section id="view-uru" class="view">
-    <div class="filters">
-      <p class="hint uru-hint">Partidos con uruguayos que jugaron en la selección <b>Mayor</b> o <b>Sub-20</b>, y partidos de la Celeste. Sin Liga Uruguaya.</p>
-      <label class="switch">
-        <input type="checkbox" id="uruAll"> <span>Incluir otros uruguayos</span>
-      </label>
-    </div>
-    <div id="uruList" class="list" aria-live="polite"></div>
-  </section>
+  <nav class="navbar" aria-label="Secciones">
+    <button data-tab="uru" aria-current="page"><span class="ind"><svg><use href="#i-ball"/></svg></span><span>Partidos</span></button>
+    <button data-tab="stats"><span class="ind"><svg><use href="#i-people"/></svg></span><span>Jugadores</span></button>
+    <button data-tab="news"><span class="ind"><svg><use href="#i-news"/></svg></span><span>Noticias</span></button>
+    <button data-tab="videos"><span class="ind"><svg><use href="#i-play"/></svg></span><span>Videos</span></button>
+  </nav>
 
-  <!-- JUGADORES -->
-  <section id="view-stats" class="view" hidden>
-    <input type="search" id="statsSearch" placeholder="Buscar jugador o club…" autocomplete="off">
-    <div class="filters">
-      <div class="seg" id="statsLevel">
-        <button data-level="all" class="on">Todos</button>
-        <button data-level="mayor">Mayor</button>
-        <button data-level="sub20">Sub-20</button>
+  <main id="main">
+    <!-- PARTIDOS -->
+    <section id="view-uru" class="view">
+      <div class="daybar">
+        <button class="icon-btn" id="prevDay" aria-label="Día anterior"><svg><use href="#i-left"/></svg></button>
+        <div class="days" id="days"></div>
+        <button class="icon-btn" id="nextDay" aria-label="Día siguiente"><svg><use href="#i-right"/></svg></button>
       </div>
-      <label class="sort">Orden
-        <select id="statsSort">
-          <option value="selPj">Partidos selección</option>
-          <option value="selG">Goles selección</option>
-          <option value="clubG">Goles club (temporada)</option>
-          <option value="clubA">Asistencias club</option>
-          <option value="clubTit">Titular en club</option>
-          <option value="age">Más jóvenes</option>
-          <option value="name">Nombre</option>
-        </select>
-      </label>
-    </div>
-    <div id="statsList" aria-live="polite"></div>
-    <p class="hint">Selección: partidos de ESPN desde 2010. Club: temporada actual. Tocá un jugador para ver su ficha, noticias y videos.</p>
-  </section>
-
-  <!-- NOTICIAS -->
-  <section id="view-news" class="view" hidden>
-    <div class="filters">
-      <select id="newsPlayer" class="player-select" aria-label="Filtrar por jugador"><option value="">Todas las noticias</option></select>
-    </div>
-    <div id="newsList" class="list" aria-live="polite"></div>
-    <p class="hint">Fuentes: Google Noticias (medios de Uruguay y la región), Tenfield, la diaria, Teledoce y Montevideo Portal. Últimos 10 días.</p>
-  </section>
-
-  <!-- VIDEOS -->
-  <section id="view-videos" class="view" hidden>
-    <div class="filters">
-      <select id="videoPlayer" class="player-select" aria-label="Elegir jugador"><option value="">Selección uruguaya</option></select>
-      <div class="seg" id="videoKind">
-        <button data-kind="all" class="on">Todo</button>
-        <button data-kind="gol">Goles</button>
-        <button data-kind="resumen">Resúmenes</button>
-        <button data-kind="short">Shorts</button>
+      <div class="toolbar">
+        <p class="lede">Partidos con uruguayos que jugaron en la Mayor o la Sub-20, y partidos de la Celeste.</p>
+        <label class="switch">
+          <input type="checkbox" id="uruAll" role="switch"><span class="track" aria-hidden="true"></span>
+          <span>Incluir otros uruguayos</span>
+        </label>
       </div>
-    </div>
-    <div id="videoList" aria-live="polite"></div>
-    <p class="hint" id="appVersion"></p>
-  </section>
+      <div id="uruList" aria-live="polite"></div>
+    </section>
 
-  <dialog id="detail"></dialog>
-  <div id="toast" class="toast" hidden></div>
+    <!-- JUGADORES -->
+    <section id="view-stats" class="view" hidden>
+      <label class="search">
+        <svg><use href="#i-search"/></svg>
+        <input type="search" id="statsSearch" placeholder="Buscar jugador o club" autocomplete="off">
+      </label>
+      <div class="toolbar">
+        <div class="seg" id="statsLevel" role="group" aria-label="Selección">
+          <button data-level="all" class="on">Todos</button>
+          <button data-level="mayor">Mayor</button>
+          <button data-level="sub20">Sub-20</button>
+        </div>
+        <label class="select">
+          <span>Ordenar</span>
+          <select id="statsSort">
+            <option value="selPj">Partidos en la selección</option>
+            <option value="selG">Goles en la selección</option>
+            <option value="clubG">Goles en el club</option>
+            <option value="clubA">Asistencias en el club</option>
+            <option value="clubTit">Titular en el club</option>
+            <option value="age">Más jóvenes</option>
+            <option value="name">Nombre</option>
+          </select>
+        </label>
+      </div>
+      <div id="statsList" aria-live="polite"></div>
+      <p class="foot">Selección: partidos registrados por ESPN desde 2010. Club: temporada actual.</p>
+    </section>
+
+    <!-- NOTICIAS -->
+    <section id="view-news" class="view" hidden>
+      <div class="toolbar">
+        <label class="select wide">
+          <span>Mostrar</span>
+          <select id="newsPlayer" aria-label="Filtrar por jugador"><option value="">Todas las noticias</option></select>
+        </label>
+      </div>
+      <div id="newsList" aria-live="polite"></div>
+      <p class="foot">Google Noticias, Tenfield, la diaria, Teledoce y Montevideo Portal. Últimos 10 días.</p>
+    </section>
+
+    <!-- VIDEOS -->
+    <section id="view-videos" class="view" hidden>
+      <div class="toolbar">
+        <label class="select wide">
+          <span>De</span>
+          <select id="videoPlayer" aria-label="Elegir jugador"><option value="">Selección uruguaya</option></select>
+        </label>
+        <div class="seg" id="videoKind" role="group" aria-label="Tipo de video">
+          <button data-kind="all" class="on">Todo</button>
+          <button data-kind="gol">Goles</button>
+          <button data-kind="resumen">Resúmenes</button>
+          <button data-kind="short">Shorts</button>
+        </div>
+      </div>
+      <div id="videoList" aria-live="polite"></div>
+      <p class="foot" id="appVersion"></p>
+    </section>
+  </main>
+
+  <dialog id="detail" aria-label="Detalle"></dialog>
 
   <script src="leagues.js"></script>
   <script src="app.js"></script>

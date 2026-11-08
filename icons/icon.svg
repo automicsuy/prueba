@@ -1,11 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#0b0f14"/>
-  <rect x="96" y="128" width="320" height="288" rx="40" fill="#18202b" stroke="#3ddc84" stroke-width="20"/>
-  <rect x="96" y="128" width="320" height="72" rx="36" fill="#3ddc84"/>
-  <rect x="96" y="164" width="320" height="36" fill="#3ddc84"/>
-  <rect x="164" y="92" width="24" height="72" rx="12" fill="#e8edf3"/>
-  <rect x="324" y="92" width="24" height="72" rx="12" fill="#e8edf3"/>
-  <circle cx="256" cy="308" r="70" fill="#e8edf3"/>
-  <polygon points="256,268 290,292 277,332 235,332 222,292" fill="#0b0f14"/>
-  <path d="M256 238v30M326 290l-36 2M300 368l-23-36M212 368l23-36M186 290l36 2" stroke="#0b0f14" stroke-width="8" fill="none"/>
+  <rect width="512" height="512" rx="120" fill="#ffffff"/>
+  <rect x="8" y="8" width="496" height="496" rx="112" fill="none" stroke="#e8f2fa" stroke-width="16"/>
+  <g stroke="#5b9fcd" stroke-linecap="round" fill="none"><line x1="256.0" y1="138.0" x2="256.0" y2="60.0" stroke-width="9"/><path d="M301.2 147.0 Q316.1 137.0 303.4 115.4 T324.1 91.5" stroke-width="7"/><line x1="339.4" y1="172.6" x2="394.6" y2="117.4" stroke-width="9"/><path d="M365.0 210.8 Q382.7 214.3 388.9 190.1 T420.5 187.9" stroke-width="7"/><line x1="374.0" y1="256.0" x2="452.0" y2="256.0" stroke-width="9"/><path d="M365.0 301.2 Q375.0 316.1 396.6 303.4 T420.5 324.1" stroke-width="7"/><line x1="339.4" y1="339.4" x2="394.6" y2="394.6" stroke-width="9"/><path d="M301.2 365.0 Q297.7 382.7 321.9 388.9 T324.1 420.5" stroke-width="7"/><line x1="256.0" y1="374.0" x2="256.0" y2="452.0" stroke-width="9"/><path d="M210.8 365.0 Q195.9 375.0 208.6 396.6 T187.9 420.5" stroke-width="7"/><line x1="172.6" y1="339.4" x2="117.4" y2="394.6" stroke-width="9"/><path d="M147.0 301.2 Q129.3 297.7 123.1 321.9 T91.5 324.1" stroke-width="7"/><line x1="138.0" y1="256.0" x2="60.0" y2="256.0" stroke-width="9"/><path d="M147.0 210.8 Q137.0 195.9 115.4 208.6 T91.5 187.9" stroke-width="7"/><line x1="172.6" y1="172.6" x2="117.4" y2="117.4" stroke-width="9"/><path d="M210.8 147.0 Q214.3 129.3 190.1 123.1 T187.9 91.5" stroke-width="7"/></g>
+  <circle cx="256" cy="256" r="92" fill="#e8f2fa" stroke="#5b9fcd" stroke-width="12"/>
+  <circle cx="256" cy="256" r="58" fill="#5b9fcd"/>
 </svg>
