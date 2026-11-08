@@ -1,6 +1,6 @@
 // GET /api/img?u=<url> → reenvía fotos de Wikimedia y escudos de ESPN desde el mismo origen,
 // para poder dibujarlas en la tarjeta "Mi oncena" (un canvas no acepta imágenes de otro origen sin CORS).
-const ALLOWED = /^(commons\.wikimedia\.org|upload\.wikimedia\.org|a\.espncdn\.com|[a-z0-9-]+\.espncdn\.com)$/;
+const ALLOWED = /^(commons\.wikimedia\.org|upload\.wikimedia\.org|thumb\.wikimedia\.org|a\.espncdn\.com|[a-z0-9-]+\.espncdn\.com)$/;
 const MAX = 3 * 1024 * 1024;
 
 module.exports = async (req, res) => {
