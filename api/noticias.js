@@ -10,9 +10,10 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 const BING = q => `https://www.bing.com/news/search?q=${encodeURIComponent(q)}&format=rss&setlang=es&cc=UY&mkt=es-XL`;
 const UY_FEEDS = [
   { url: 'https://www.tenfield.com.uy/feed/', src: 'Tenfield' },
-  { url: 'https://ladiaria.com.uy/feeds/articulos/', src: 'la diaria' },
-  { url: 'https://www.teledoce.com/feed/', src: 'Teledoce' },
-  { url: 'https://www.montevideo.com.uy/anxml.aspx?59', src: 'Montevideo Portal' },
+  // Medios generales: solo notas de sus secciones de deportes.
+  { url: 'https://ladiaria.com.uy/feeds/articulos/', src: 'la diaria', only: /\/deporte/i },
+  { url: 'https://www.teledoce.com/feed/', src: 'Teledoce', only: /deporte|futbol|seleccion/i },
+  { url: 'https://www.montevideo.com.uy/anxml.aspx?59', src: 'Montevideo Portal', only: /deporte|futbol|seleccion/i },
 ];
 const GENERAL = ['"selección uruguaya"', '"selección uruguaya" convocados', '"Uruguay Sub-20"'];
 const SEL_RE = /selecci[oó]n uruguaya|la celeste|\bcelestes?\b|bielsa|uruguay sub[- ]?20|eliminatorias.*uruguay|uruguay.*eliminatorias/i;
@@ -72,18 +73,20 @@ module.exports = async (req, res) => {
   try {
     const players = await getActivePlayers(req.headers.host);
     const match = playerMatcher(players);
-    // Búsquedas: nombres agrupados de a 4 con OR, priorizando a los de la Mayor más recientes.
+    // Búsquedas: una por jugador para los de la Mayor más recientes; el resto agrupados de a 4 con OR.
     const sorted = players.slice().sort((a, b) => (b.mayor - a.mayor) || b.last.localeCompare(a.last));
-    const queries = [];
-    for (let i = 0; i < sorted.length; i += 4) queries.push(sorted.slice(i, i + 4).map(p => `"${p.n}"`).join(' OR '));
+    const solo = sorted.filter(p => p.mayor && p.last >= '2024').slice(0, 60);
+    const rest = sorted.filter(p => !solo.includes(p));
+    const queries = solo.map(p => `"${p.n}"`);
+    for (let i = 0; i < rest.length; i += 4) queries.push(rest.slice(i, i + 4).map(p => `"${p.n}"`).join(' OR '));
     const jobs = [
       ...queries.map(q => ({ url: BING(q) })),
       ...GENERAL.map(q => ({ url: BING(q) })),
-      ...UY_FEEDS.map(f => ({ url: f.url, src: f.src })),
+      ...UY_FEEDS.map(f => ({ url: f.url, src: f.src, only: f.only })),
     ];
     const errors = [];
     const lists = await pool(jobs, 10, async j => {
-      try { return parseRss(await fetchText(j.url), j.src); }
+      try { return parseRss(await fetchText(j.url), j.src).filter(it => !j.only || j.only.test(it.link)); }
       catch (e) { errors.push(`${j.src || 'Bing'}: ${e.message}`); return []; }
     });
     const now = Date.now();
