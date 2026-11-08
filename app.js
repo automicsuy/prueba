@@ -1,7 +1,7 @@
 'use strict';
 // Celestes: los uruguayos de la selección — partidos, estadísticas, noticias y videos.
 
-const APP_VERSION = '10';
+const APP_VERSION = '11';
 const LEAGUES = window.LEAGUES;
 const LEAGUE_BY_ID = Object.fromEntries(LEAGUES.map(l => [l.id, l]));
 const $ = s => document.querySelector(s);
@@ -16,7 +16,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* sin storage */ } },
 };
 const state = {
-  tab: 'uru',
+  tab: 'sel',
   day: startOfDay(new Date()),
   uruAll: store.get('uruAll', false),
   statsLevel: 'all',
@@ -426,7 +426,7 @@ function fillPlayerSelects() {
 /* ---------- UI general ---------- */
 const POS = { G: 'Arquero', D: 'Defensa', M: 'Mediocampista', F: 'Delantero' };
 const dlgHead = label => `<header class="dlg-head"><span>${label}</span><button class="icon-btn" value="close" aria-label="Cerrar">${ic('close')}</button></header>`;
-const SUBS = { uru: () => 'Uruguayos en la cancha', stats: () => statsData ? `${statsData.length} jugadores en actividad` : 'Jugadores en actividad', news: () => 'Últimos 10 días', videos: () => 'Goles, resúmenes y shorts' };
+const SUBS = { sel: () => 'Selección uruguaya', uru: () => 'Uruguayos en la cancha', stats: () => statsData ? `${statsData.length} jugadores en actividad` : 'Jugadores en actividad', news: () => 'Últimos 10 días', videos: () => 'Goles, resúmenes y shorts' };
 function setSub(text) { $('#appbarSub').textContent = text; }
 
 function showDialog(html, kind = '') {
@@ -443,11 +443,14 @@ function setTab(tab) {
   document.querySelectorAll('section.view').forEach(v => (v.hidden = v.id !== `view-${tab}`));
   setSub(SUBS[tab]());
   window.scrollTo(0, 0);
-  ({ uru: renderUru, stats: renderStats, news: renderNews, videos: renderVideos })[tab]();
+  if (tab === 'sel') loadStats().catch(() => {}); // fotos y fichas de jugadores
+  ({ sel: renderSel, uru: renderUru, stats: renderStats, news: renderNews, videos: renderVideos })[tab]();
 }
 function syncSeg(sel, val) { document.querySelectorAll(`${sel} button`).forEach(b => b.classList.toggle('on', (b.dataset.level || b.dataset.kind) === val)); }
 
 document.addEventListener('click', ev => {
+  // Sección Selección (y su selector de jugadores en el diálogo).
+  if ((state.tab === 'sel' || ev.target.closest('#detail')) && typeof onSelClick === 'function' && onSelClick(ev)) return;
   const el = ev.target.closest('button, a');
   if (!el) return;
   if (el.matches('.navbar button')) return setTab(el.dataset.tab);
@@ -472,6 +475,9 @@ document.addEventListener('click', ev => {
 $('#statsList').addEventListener('click', ev => { const row = ev.target.closest('[data-player]'); if (row) openPlayer(row.dataset.player); });
 // Jugadores dentro de las tarjetas de partido (son <li>, no botones).
 $('#uruList').addEventListener('click', ev => { const li = ev.target.closest('li[data-player]'); if (li) { ev.stopPropagation(); openPlayer(li.dataset.player); } });
+$('#view-sel').addEventListener('input', onSelInput);
+// Líderes de la sección Selección (son <li>).
+$('#view-sel').addEventListener('click', ev => { const li = ev.target.closest('li[data-player]'); if (li && playerById(li.dataset.player)) openPlayer(li.dataset.player); });
 $('#statsSort').value = state.statsSort;
 $('#statsSort').addEventListener('change', ev => { state.statsSort = ev.target.value; store.set('statsSort', state.statsSort); renderStats(); });
 let statsTimer;
@@ -503,4 +509,10 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
 }
 
-setTab('uru');
+// Enlace directo (p. ej. al volver del inicio de sesión con Google): ?tab=sel&vista=votar
+const params = new URLSearchParams(location.search);
+if (params.get('vista') && typeof sel !== 'undefined') sel.view = params.get('vista');
+if (params.has('tab') && !params.has('code')) history.replaceState(null, '', location.pathname);
+setTab(['sel', 'uru', 'stats', 'news', 'videos'].includes(params.get('tab')) ? params.get('tab') : 'sel');
+// Limpia el ?code= de la URL una vez que Supabase lo canjeó por la sesión.
+if (params.has('code')) setTimeout(() => history.replaceState(null, '', location.pathname), 4000);

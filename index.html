@@ -50,15 +50,22 @@
   </header>
 
   <nav class="navbar" aria-label="Secciones">
-    <button data-tab="uru" aria-current="page"><span class="ind"><svg><use href="#i-ball"/></svg></span><span>Partidos</span></button>
+    <button data-tab="sel" aria-current="page"><span class="ind"><svg><use href="#i-flag"/></svg></span><span>Selección</span></button>
+    <button data-tab="uru"><span class="ind"><svg><use href="#i-ball"/></svg></span><span>Partidos</span></button>
     <button data-tab="stats"><span class="ind"><svg><use href="#i-people"/></svg></span><span>Jugadores</span></button>
     <button data-tab="news"><span class="ind"><svg><use href="#i-news"/></svg></span><span>Noticias</span></button>
     <button data-tab="videos"><span class="ind"><svg><use href="#i-play"/></svg></span><span>Videos</span></button>
   </nav>
 
   <main id="main">
+    <!-- SELECCIÓN -->
+    <section id="view-sel" class="view">
+      <div class="seg scroll" id="selTabs" role="tablist" aria-label="Selección"></div>
+      <div id="selBody" aria-live="polite"></div>
+    </section>
+
     <!-- PARTIDOS -->
-    <section id="view-uru" class="view">
+    <section id="view-uru" class="view" hidden>
       <div class="daybar">
         <button class="icon-btn" id="prevDay" aria-label="Día anterior"><svg><use href="#i-left"/></svg></button>
         <div class="days" id="days"></div>
@@ -131,7 +138,9 @@
 
   <dialog id="detail" aria-label="Detalle"></dialog>
 
-  <script src="leagues.js"></script>
-  <script src="app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
+  <script src="leagues.js" defer></script>
+  <script src="seleccion.js" defer></script>
+  <script src="app.js" defer></script>
 </body>
 </html>
