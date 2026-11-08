@@ -111,7 +111,7 @@ function toastMsg(msg) {
 }
 
 /* ---------- Render principal ---------- */
-const SEL_VIEWS = [['resumen', 'Resumen'], ['forma', 'Cómo llegan'], ['votar', 'Votá'], ['prode', 'Prode'], ['resultados', 'Resultados'], ['convocados', 'Convocados'], ['noticias', 'Noticias']];
+const SEL_VIEWS = [['resumen', 'Resumen'], ['forma', 'Cómo llegan'], ['votar', 'Votá'], ['prode', 'Prode'], ['fantasy', 'Fantasy'], ['resultados', 'Resultados'], ['convocados', 'Convocados'], ['noticias', 'Noticias']];
 let selReq = 0;
 async function renderSel() {
   const box = $('#selBody');
@@ -121,7 +121,7 @@ async function renderSel() {
   try { await loadSel(); } catch (err) { if (req === selReq) box.innerHTML = errorBox('No se pudieron cargar los datos de la selección.', err, 'retrySel'); return; }
   if (req !== selReq) return;
   setSub(sel.data.upcoming[0] ? `Próximo: ${sel.data.upcoming[0].rival.name}` : 'Selección uruguaya');
-  const views = { resumen: viewResumen, convocados: viewConvocados, votar: viewVotar, prode: viewProde, forma: viewForma, resultados: viewResultados, noticias: viewNoticias };
+  const views = { resumen: viewResumen, convocados: viewConvocados, votar: viewVotar, prode: viewProde, forma: viewForma, fantasy: viewFantasy, resultados: viewResultados, noticias: viewNoticias };
   await (views[sel.view] || viewResumen)(box, req);
 }
 
@@ -156,6 +156,8 @@ async function viewResumen(box) {
     ${d.upcoming.length > 1 ? `<h3 class="group-h">También en agenda</h3><div class="card">${d.upcoming.slice(1).map(m => `<div class="mrow">${flag(m.rival.logo, m.rival.name)}<span><b>${m.local ? 'Uruguay vs ' : ''}${esc(m.rival.name)}${m.local ? '' : ' vs Uruguay'}</b><small>${esc(m.comp)} · ${esc(cap(fmtDayLong.format(new Date(m.date))))}, ${fmtTime.format(new Date(m.date))}</small></span></div>`).join('')}</div>` : ''}
     ${w ? `<button class="vote-cta" data-sel-view="votar"><span><b>Armá tu selección</b><small>Votá tus 26 convocados y tu oncena para la ${esc(w.title.replace(/^Fecha FIFA /, 'fecha FIFA de '))}. Cierra: ${esc(cap(fmtDayLong.format(new Date(w.closesAt))))}.</small></span>${ic('right')}</button>` : ''}
     ${next ? `<button class="vote-cta prode-cta" data-sel-view="prode"><span><b>Jugá al prode</b><small>Pronosticá ${next.local ? `Uruguay–${esc(next.rival.name)}` : `${esc(next.rival.name)}–Uruguay`} y el goleador celeste. Armá una liga con tus amigos.</small></span>${ic('right')}</button>` : ''}
+    <div id="daily3"></div>
+    <button class="vote-cta prode-cta" data-sel-view="fantasy"><span><b>Fantasy de legionarios</b><small>Elegí 5 uruguayos y sumá con lo que hacen este finde en sus clubes. Cierra el viernes a las 12:00.</small></span>${ic('right')}</button>
     <button class="vote-cta prode-cta" data-sel-view="forma"><span><b>Cómo llegan</b><small>El índice de forma de cada uruguayo en su club, los que piden pista y los convocados en baja.</small></span>${ic('right')}</button>
     <h3 class="group-h">Últimos 12 meses</h3>
     <div class="kpis rec"><div><b>${r.pj}</b><small>Partidos</small></div><div><b>${r.g}</b><small>Ganados</small></div><div><b>${r.e}</b><small>Empates</small></div><div><b>${r.p}</b><small>Perdidos</small></div><div><b>${r.gf}</b><small>Goles a favor</small></div><div><b>${r.gc}</b><small>En contra</small></div></div>
@@ -164,6 +166,7 @@ async function viewResumen(box) {
     <h3 class="group-h">Líderes en actividad <small>· selección mayor desde 2010</small></h3>
     <div class="seg small" id="leaderSeg"><button class="on" data-leader="goles">Goles</button><button data-leader="partidos">Partidos</button><button data-leader="asistencias">Asistencias</button></div>
     <div id="leaderList">${leaderList(d.leaders.goles, 'g', 'goles')}</div>`;
+  if (typeof paintDaily3 === 'function') paintDaily3();
 }
 
 /* ---------- Convocados oficiales ---------- */
@@ -367,6 +370,7 @@ function onSelClick(ev) {
   if (typeof onShareClick === 'function' && onShareClick(ev)) return true;
   if (typeof onProdeClick === 'function' && onProdeClick(ev)) return true;
   if (typeof onFormaClick === 'function' && onFormaClick(ev)) return true;
+  if (typeof onFantasyClick === 'function' && onFantasyClick(ev)) return true;
   const el = ev.target.closest('button, [data-player]');
   if (!el) return false;
   const ds = el.dataset;

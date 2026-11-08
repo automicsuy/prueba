@@ -4,6 +4,7 @@ const { send } = require('./_lib');
 const { URU_TEAM_ID, URU_U20_TEAM_ID, getSelecciones, pool } = require('./_uru');
 const { photoIndex, findPhoto } = require('./_photos');
 const { parseGameLog, formIndex } = require('./_form');
+const { syncFantasy } = require('./_fantasy');
 
 const WEB = 'https://site.web.api.espn.com/apis/common/v3/sports/soccer/athletes';
 const NATIONAL = new Set([URU_TEAM_ID, URU_U20_TEAM_ID]);
@@ -91,6 +92,7 @@ module.exports = async (req, res) => {
       p.mayor = sel.stats?.mayor?.[p.id] || (sel.mayor[p.id] ? { ...empty } : null);
       p.sub20 = sel.stats?.sub20?.[p.id] || (sel.sub20[p.id] ? { ...empty } : null);
     });
+    await syncFantasy(out).catch(() => {});
     out.sort((x, y) => (y.mayor?.pj || 0) - (x.mayor?.pj || 0) || (y.sub20?.pj || 0) - (x.sub20?.pj || 0));
     res.setHeader('cache-control', 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
     res.statusCode = 200;

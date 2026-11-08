@@ -97,12 +97,15 @@ async function paintCallBox(p) {
   </div>`;
 }
 async function castCall(id, yes) {
-  if (!sel.session) { toastMsg('Iniciá sesión con Google para votar.'); return signIn('forma'); }
+  await initSupabase().catch(() => null);
+  if (!sel.sb) { toastMsg('La votación todavía no está configurada.'); return false; }
+  if (!sel.session) { toastMsg('Iniciá sesión con Google para votar.'); signIn(state.tab === 'sel' ? sel.view : 'forma'); return false; }
   const { error } = await sel.sb.from('player_calls').upsert({ window_id: sel.data.window.id, player_id: id, yes }, { onConflict: 'user_id,window_id,player_id' });
-  if (error) return toastMsg(error.message);
+  if (error) { toastMsg(error.message); return false; }
   toastMsg(yes ? 'Lo convocaste.' : 'Lo dejaste afuera.');
   const p = statsData?.find(x => x.id === id);
-  if (p) paintCallBox(p);
+  if (p && $('#callBox')) paintCallBox(p);
+  return true;
 }
 
 function onFormaClick(ev) {
@@ -111,7 +114,42 @@ function onFormaClick(ev) {
   ev.preventDefault();
   if (b.dataset.formaScope) forma.scope = b.dataset.formaScope;
   if (b.dataset.formaLine) forma.line = b.dataset.formaLine;
-  if (b.dataset.call) { const [id, v] = b.dataset.call.split(':'); castCall(id, v === '1'); return true; }
+  if (b.dataset.call) {
+    const [id, v] = b.dataset.call.split(':');
+    castCall(id, v === '1').then(ok => {
+      if (ok && b.dataset.d3 !== undefined) { const d = d3Done(); d[id] = v === '1'; try { localStorage.setItem(D3_KEY(), JSON.stringify(d)); } catch { /* nada */ } paintDaily3(); }
+    });
+    return true;
+  }
   paintForma();
   return true;
+}
+
+/* ---------- "3 del día": hábito diario de 30 segundos ---------- */
+const D3_KEY = () => `celestes:d3:${new Date().toISOString().slice(0, 10)}`;
+function dailyThree() {
+  const pool = (statsData || []).filter(p => p.form?.i != null && (p.mayor || p.form.i >= 60)).sort((a, b) => a.id.localeCompare(b.id));
+  if (pool.length < 3) return [];
+  // Elección determinística por día: todos ven los mismos 3.
+  let h = 0; for (const c of new Date().toISOString().slice(0, 10)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  const out = [];
+  for (let k = 0; out.length < 3 && k < 50; k++) { const p = pool[(h + k * 7919) % pool.length]; if (!out.includes(p)) out.push(p); }
+  return out;
+}
+const d3Done = () => { try { return JSON.parse(localStorage.getItem(D3_KEY()) || '{}'); } catch { return {}; } };
+async function paintDaily3() {
+  const box = $('#daily3');
+  const w = sel.data?.window;
+  if (!box || !w || Date.parse(w.closesAt) <= Date.now()) return;
+  try { await loadStats(); } catch { return; }
+  const three = dailyThree();
+  if (!three.length || !$('#daily3')) return;
+  const done = d3Done();
+  const all = three.every(p => done[p.id] !== undefined);
+  $('#daily3').innerHTML = `<h3 class="group-h">${ic('flag')}3 del día <small>· ¿los convocás?</small></h3>
+    <div class="d3">${three.map(p => `<div class="d3c ${done[p.id] !== undefined ? 'done' : ''}">
+      <button type="button" class="d3p" data-player="${esc(p.id)}">${avatar(p, 'lg')}<b>${esc(shortName(p.n))}</b><small>${esc(p.club.name)}</small>${formChip(p.form)}</button>
+      <div class="d3b"><button type="button" class="btn ${done[p.id] === true ? 'filled' : ''}" data-call="${esc(p.id)}:1" data-d3>Sí</button><button type="button" class="btn ${done[p.id] === false ? 'filled' : ''}" data-call="${esc(p.id)}:0" data-d3>No</button></div>
+    </div>`).join('')}</div>
+    ${all ? '<p class="kpi-note">¡Listo por hoy! Mañana hay 3 nuevos.</p>' : ''}`;
 }

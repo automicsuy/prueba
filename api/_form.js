@@ -29,6 +29,8 @@ function parseGameLog(gl) {
       id: row.eventId, d: ev.gameDate || '', lg: ev.leagueShortName || ev.leagueName || '',
       opp: ev.opponent?.displayName || '', oppLogo: ev.opponent?.logo || '', home: ev.atVs === 'vs',
       score: ev.score || '', res: ev.gameResult || '',
+      // Goles recibidos por su equipo (para la valla invicta de defensas).
+      ga: ev.atVs === 'vs' ? num(ev.awayTeamScore) : num(ev.homeTeamScore),
       st: /start/i.test(app) ? 'T' : /sub/i.test(app) ? 'S' : '-',
       g: v(row, 'totalGoals'), a: v(row, 'goalAssists'), sog: v(row, 'shotsOnTarget'),
       cs: v(row, 'cleanSheet'), sv: v(row, 'saves'), gc: v(row, 'goalsConceded'), tr: v(row, 'redCards'),
